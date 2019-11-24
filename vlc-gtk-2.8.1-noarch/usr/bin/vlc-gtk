@@ -282,42 +282,45 @@ echo '
 
   Usage: '$SELF' [OPTION(S)]
 
-  NOTE: The 1st option given must be a file, dir or URL for playback to start immediately.
-  You can force immediate playback with the --play option.
+  NOTE: The 1st option given must be a file, dir or URL for playback to start
+  immediately. You can force immediate playback with the --play option.
 
   Options:
 
-  [FILE/URL]			Start immediate playback of FILE or URL, if no other options.
-  -o|--open "file"		Set a file to play
-  --play 			Start playback immediately
-  -d|--dir "dir"		Set a directory to play
-  -u|--url "url"		Choose the URL/stream to play
-  --fave 			Save stream to favourites
-  --subs "file"			Choose the subtitles file to load
-  --subs-delay <integer>	The number of seconds to delay
-  -r|--random			Shuffle files during playback
-  --loop			Loop through all files repeatedly
-  --play-stop			Stop playback after each file completes
-  --audio			Enable audio playback
-  --vol <integer>		Set the volume level (0...1024)
-  --dolby <string>		Enable dolby surround (Auto, On, Off)
-  --equalizer <string>		Equalizer preset (classical,club,dance,fullbass,fullbasstreble,fulltreble,headphones,largehall,live,party,pop,reggae,rock,ska,soft,techno)
-  --mute			Disable audio playback
-  -fs|--fullscreen	   	Load the video file in fullscreen
-  --no-overlay			Disable overlay video output
-  --on-top			Show the video window above all other apps
-  --crop <string>		Crop video image (16:10, 16:9, 1:1, 221:100, 4:3, 5:4)
-  --aspect <string>		Set the video aspect ratio (16:10, 16:9, 1:1, 221:100, 4:3, 5:4)
-  --vout			Video output (XVideo,X11,SDL,GLX,SVGAlib)
-  --window	   		Load the video file in window
-  --ffmpeg-fast	   		Use ffmpeg speed up hacks for faster playback (may cause errors)
-  --no-osd			Disable the on screen display
-  --osd-size <string>		OSD font size (Default, Smaller, Small, Large, Larger)
-  --tab				Choose the tab to show at startup (0,1,2,3)
-  --debug			View all commands sent to vlc in a popup window
-  --logfile "file"		The file to which VLC write its messages, errors, warnings, etc.
-  -v|--version			Show the version number of this app
-  -h|--help			Show this help message
+  [FILE/URL]              Start playback of FILE or URL, if no other options
+  -o|--open "file"        Set a file to play
+  --play                  Start playback immediately
+  -d|--dir "dir"          Set a directory to play
+  -u|--url "url"          Choose the URL/stream to play
+  --fave                  Save stream to favourites
+  --subs "file"           Choose the subtitles file to load
+  --subs-delay <integer>  The number of seconds to delay
+  -r|--random             Shuffle files during playback
+  --loop                  Loop through all files repeatedly
+  --play-stop             Stop playback after each file completes
+  --audio                 Enable audio playback
+  --vol <integer>         Set the volume level (0...1024)
+  --dolby <string>        Enable dolby surround (Auto, On, Off)
+  --equalizer <string>    Equalizer preset (classical, club, dance, fullbass,
+                          fullbasstreble, fulltreble, headphones, largehall,
+                          live, party, pop, reggae, rock, ska, soft, techno)
+  --mute                  Disable audio playback
+  -fs|--fullscreen        Load the video file in fullscreen
+  --no-overlay            Disable overlay video output
+  --on-top                Show the video window above all other apps
+  --crop <string>         Crop video image (16:10, 16:9, 1:1, 221:100, 4:3, 5:4)
+  --aspect <string>       Set the video aspect ratio (16:10, 16:9, 1:1, 221:100,
+                          4:3, 5:4)
+  --vout                  Video output (XVideo,X11,SDL,GLX,SVGAlib)
+  --window                Load the video file in window
+  --ffmpeg-fast           Speed up hacks for faster playback (may cause errors)
+  --no-osd                Disable the on screen display
+  --osd-size <string>     OSD font size (Default, Smaller, Small, Large, Larger)
+  --tab                   Choose the tab to show at startup (0,1,2,3)
+  --debug                 View all commands sent to vlc in a popup window
+  --logfile "file"        The file to which VLC write its messages, errors, etc.
+  -v|--version            Show the version number of this app
+  -h|--help               Show this help message
 
   Examples:
 
@@ -325,7 +328,8 @@ echo '
   '$SELF' --open "/film.avi" --subs "/subs.srt" --fullscreen --play
   '$SELF' -fs -d "${HOME}/tv-series/" -r
 
-  Requirements: '$GTKDIALOG', xdialog, VLC 0.8.6 or higher'; exit;;
+  Requirements: gtkdialog, xdialog, xdotools, VLC 0.8.6 or higher
+'; exit;;
       esac
       shift
       I=$[$I+1]
