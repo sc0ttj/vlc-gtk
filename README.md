@@ -15,7 +15,7 @@ Only been tested on Puppy Linux. It may not work on other distros.
 
 ## Dependencies:
 
-- gtkdialog >= 0.8.4
+- [gtkdialog](https://github.com/01micko/gtkdialog/) >= 0.8.4
 - vlc
 - Xdialog
 - xdotool
