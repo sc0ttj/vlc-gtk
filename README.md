@@ -6,12 +6,12 @@ This is a lightweight frontend GUI for [VLC](https://www.videolan.org/index.en-G
 which uses [gtkdialog](https://github.com/01micko/gtkdialog/) to render the GUI,
 designed for Puppy Linux.
 
-This program is simply a set of shell scripts, and contains no binaries.
+This program is just a set of shell scripts, and contains no binaries.
 
-If you can't or don't want the large Qt-based VLC GUI, then this is a tiny
-alternative GUI, which you may find useful.
+If you don't have the (large) Qt-based VLC GUI, this is a tiny alternative GUI,
+which you may find useful.
 
-VLC-GTK has only been tested on Puppy Linux. It may not work on other distros.
+Only been tested on Puppy Linux. It may not work on other distros.
 
 ## Dependencies:
 
@@ -118,7 +118,7 @@ cd vlc-gtk
 
 6. Share your changes:
 
-, then push your changes to your fork:
+Push your changes to your fork:
 
 ```shell
 git checkout -b "mybranch"
