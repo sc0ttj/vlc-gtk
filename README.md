@@ -26,7 +26,13 @@ Note, `sopcast` and `rtmpdump` are required for some online streams.
 
 ## Screenshot
 
+### Main menu
+
 ![VLC-GTK interface](vlc-gtk.gif)
+
+### During video playback
+
+![VLC-GTK on-screen controls, during playback](vlc-gtk-playback.png)
 
 ## Features:
 
