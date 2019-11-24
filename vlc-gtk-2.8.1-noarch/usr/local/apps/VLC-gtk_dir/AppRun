@@ -1,0 +1,2 @@
+#!/bin/sh
+exec vlc-gtk --tab 1 --dir "$@"

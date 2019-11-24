@@ -1,0 +1,3 @@
+#!/bin/sh
+exec vlc-gtk "$@" --window --play
+exit 0

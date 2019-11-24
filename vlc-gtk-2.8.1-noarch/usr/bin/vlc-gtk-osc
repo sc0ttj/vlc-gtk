@@ -1,0 +1,464 @@
+#!/bin/bash
+# this script will search for VLC playback windows, and if found, attach on screen controls to it.
+#requires xdotool
+#110110 BK fixes.
+#070220121: fixes for handling of non-video or non-working playback
+#070220122: gtkdialog speed up
+#120428 faster disabling of OSC GUI
+#020812 kill cvlc as well
+#040812 added crop and aspect ratio buttons, moved buttons around a bit, updated tooltips, show last used tab in GUI restart
+#290812 check $OSC ("stream" or "file") and load relevant GUI.. pass $RESETOSC to play_fave - dont reset OSC from vlc-gtk-osc
+#020912 exit if debug=true
+#240912 fixes use $APPNAME
+#121012 quit if xdotool not found, less output from xdotool, renamed to vlc-gtk-osc
+#131012 added kill_vlc to play_fave btn in stream gui
+#151012 use kill_vlc, fixes for multiple instances of VLC playback
+#161012 better fixes for multiple instances: this OSC will attach itself only to most recent vlc process then stay with that one, will not affect/kill other OSCs or VLCs
+#171012 quit OSC when VLC playback has finished, fixed double return to main GUI
+#040213 added button to record selected fave, fixes for loading files/streams without resetting OSC, added vlc icon to OSC, other minor clean ups
+#180213 use the gtkrc set by main vlc-gtk gui
+#190213 updates to getting screen dimensions, code cleanups
+#230213 added basic playlist gui for audio files.. fixed: exit immediately if no RUNVLC_PID or playlist gui already running.. fixed reset rcfile.. 
+#240213 faster window finding and resizing, renamed audio playlist title.. 
+#250213 fixes for detecting window ID of video.. fixes in playlist filter.. 
+#260213 fixed find gtkdialog
+#270213 fixed declare funcs first!.. get rcfile.. 
+#280213 fixed, auto play next file in audio playlist.. improved playlist in gui - separate files and dirs, fixed case insensitive extension search, 
+#020313 small fixes, fewer calls to get wid.. fixed OSC naming.. fixed resize_playback.. better sorting of playlist(s).. fixes quit button..
+#100913 combined OSC and Audio Playlist GUI into one single Playlist+OSC GUI, supports files, dirs, playlists, streams, video and audio.. fixed click blank TREE and resize TREE.. 
+#130913 fixed file controls when tree loads new playlist item.. dont add emtpy playlist to OSC.. other small fixes.. 
+
+RUNVLC_PID="`cat /tmp/vlc-gtk_cvlcpids_$(whoami) 2>/dev/null`" #250213 get PIDs of any VLCs launched by vlc-gtk
+[ "$RUNVLC_PID" = "" ] && echo "no runvlc_pid" && exit 1 #230213 quit if vlc not running at all
+[ "$DISABLE_OSC" = true ] && echo "osc disabled" && exit 1 #120428
+#[ -f /tmp/vlc-gtk-playlist_$(whoami)-on ] && echo "playlist running" && exit 1 #230213 playlist gui is already playing, just exit
+[ "$DEBUG" = true ] && echo "debug" && exit 0 #020912
+[ "`which xdotool 2>/dev/null`" = "" ] && exit 0 #121012
+
+. "$CONFIG" #270213 get all options everytime
+
+# get gtkdialog version #260213 updated
+for A in gtkdialog4 gtkdialog3 gtkdialog; do
+	[ "`which $A 2>/dev/null`" != "" ] && export GTKDIALOG=$A && break
+	GTKDIALOG=''
+done
+
+### set functions
+
+set -a
+
+displayinfo(){  #180213 get display info
+ xwininfo -root|while read VAR VALUE; do 
+ case $VAR in 
+     Height:)echo XHEIGHT=$VALUE;; 
+     Width:)echo XWIDTH=$VALUE;; 
+     Depth:)echo XDEPTH=$VALUE;; 
+ esac 
+ done 
+ }
+get_wids () {
+	#BK vlc 1.1.5 does not display a window with "XVideo output" in title...
+	#BK note, default video output setting is saved in /root/.config/vlc/vlcrc, exs: vout=xcb_glx, vout=xcb_x11, vout=xcb_xv, vout=vout_sdl
+	for CNT in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 #BK delay is needed.
+	do
+	   #echo $CNT
+	   # get the vlc playback windowid specifically
+	   wid="$(xdotool search --name 'VLC media player' 2>/dev/null)"  #BK outputs: XVideo, X11, GLX
+	   [ "$wid" = "" ] && wid="$(xdotool search --name 'VLC (hardware YUV SDL output)' 2>/dev/null)"   #BK output: SDL
+	   [ "$wid" = "" ] && wid="$(xdotool search --name 'VLC (software YUV SDL output)' 2>/dev/null)"  #250213 
+	   [ "$wid" = "" ] && wid="$(xdotool search --name '(XVideo output)' 2>/dev/null)" #0.8.6 and older VLCs have this title
+	   [ "$wid" = "" ] && wid="$(xdotool search --name 'VLC (X11 output)' 2>/dev/null)"  #250213 vlc 1.0.6, lucid puppy
+	   [ "$wid" = "" ] && wid="$(xdotool search --name 'VLC ' 2>/dev/null)"  #250213 failsafe ...
+	   [ "$wid" != "" ] && break
+	   sleep 0.1
+	done
+	vlcwid="$(xdotool search --name "vlc" 2>/dev/null)" &>/dev/null  # look for the vlc window(s)
+	vlcgtkwid="$(xdotool search --name "$APPNAME" 2>/dev/null)" &>/dev/null
+    guiwid="$(xdotool search --name "$APPNAME OSC" 2>/dev/null)" &>/dev/null #161012 dont do it here, it messes up the results
+	export wid="$(echo "${wid// /\n}" | tail -1)" #161012 put each wid on a new line, and keep only the last line.. it is the most recent VLC process
+}
+debug_btns () {
+	# got all vars, print them, debug
+	echo "# vlc-gtk-osc log file" > /tmp/vlc-gtk_osc_$(whoami)
+	echo "
+	wid					$wid
+	vlcgtkwid			$vlcgtkwid
+	vlcwid				${vlcwids[@]}
+	guiwid				$guiwid
+
+	screen:		 	${XWIDTH}x${XHEIGHT}
+	player size		${WIDTH}x${HEIGHT}
+	player pos		${XPOS}x${YPOS}
+	controls pos	${GUIXPOS}x${GUIYPOS}
+	"  >> /tmp/vlc-gtk_osc_$(whoami)
+}
+resize_playback () { #020313 fixes, get_wids early, more sleeps, 
+	if [ "$FULL" = "false" ];then # 03022012
+		get_wids
+		# start double-checking for wids
+		for CNT in 1 2 3 4 5 6 7 8 #050912 fewer tries, more sleep
+		do # use 'seq' because we may have to wait for vlc
+			if [ "$wid" != "" -a "$guiwid" != "" ];then
+				sleep 0.1
+				# move vlc gui window, then resize playback window and move it
+				xdotool windowmove $wid $XPOS $YPOS 2>/dev/null
+				sleep 0.1
+				xdotool windowsize $wid $WIDTH $HEIGHT 2>/dev/null
+				sleep 0.1
+				xdotool windowmove $guiwid $GUIXPOS $GUIYPOS 2>/dev/null
+				#focus_vlc
+				break
+			else
+				sleep 0.25 #BK change 1 to 0.5 ... changed again to 0.25
+				#get_wids #020313 not really needed..?
+			fi
+		done
+	fi
+}
+minimize_vlc () {
+	# all vlc windows now running, minimize the vlc window(s) we don't want
+	COUNTER=${#vlcwids[*]} # count array size
+	until [  $COUNTER -eq 0 ]; do 
+		currentvlcwid="${vlcwids[$COUNTER]}"
+		# minimize each window found in the array, except playback window
+		[ "$currentvlcwid" ] && [ "$currentvlcwid"  != "$wid" ] && xdotool windowminimize $currentvlcwid 2>/dev/null
+		let COUNTER-=1
+	done
+}
+focus_vlc () {
+	# activate and raise on vlc video window
+	xdotool windowactivate $wid &>/dev/null
+	xdotool windowactivate $guiwid &>/dev/null
+	xdotool windowraise $wid &>/dev/null
+	xdotool windowraise $guiwid &>/dev/null
+}
+
+#190213 updated getting of screen dimensions
+#XWIDTH=`xwininfo -root | grep -m 1 '\geometry' | cut -f4 -d ' ' | cut -f2 -d ' ' | cut -f1 -d 'x'`
+#XHEIGHT=`xwininfo -root | grep -m 1 '\geometry' | cut -f4 -d ' ' | cut -f2 -d 'x' | cut -f1 -d '+'`
+eval `displayinfo`
+sync
+# ugly fix for dual screen/ultra wide or tall monitors (dual screens, etc)
+[[ $(($XWIDTH / $XHEIGHT)) = 2 ]] && XWIDTH=$(($XWIDTH / 2)) 
+[[ $(($XHEIGHT / $XWIDTH)) = 1 ]] && XHEIGHT=$(($XHEIGHT/2))
+#190213 better size adjustments, adjustable width of combobox for streams
+if [ $XWIDTH ] && [ $XWIDTH -gt 1024 ];then #110913
+	WIDTH=$((XWIDTH/100*70)) 
+	STREAMLIST_WIDTH=430
+elif [ $XWIDTH ] && [ $XWIDTH -gt 800 ];then #270213
+	WIDTH=$((XWIDTH/100*90)) # resize window to 70% of screen width, if res is high enough
+	STREAMLIST_WIDTH=340
+else
+	WIDTH=$((XWIDTH/100*90)) # resize window to 90% of screen width, if res not so high
+	STREAMLIST_WIDTH=360
+fi
+HEIGHT=$((XHEIGHT/100*80)) # resize window to 50% of screen height, if res is high enough
+export XPOS=$(($((XWIDTH-$((WIDTH))))/2)) # put window x center: screenwidth-width/2
+export YPOS=$((HEIGHT/100*10)) # put window near top (controls go below later)  #110913  nearer top
+export GUIXPOS=$((XPOS)) # put the controls in line vertically, adjust for extra width
+export GUIYPOS=$((YPOS+HEIGHT+30)) # put the controls under the playback window
+wid="" # playback window id
+vlcwid="" # orginal list from xdotool
+vlcwids="" # array of $vlcwid
+guiwid="" # controld window id
+export XPID=$! # get pid of vlc
+export FULL=$1
+export PLAYNOW=$2
+
+if [ "$PLAYNOW" = true ];then
+	export exit_button_tooltip="Stop playback now. Or click the X above, and playback will continue without these controls"
+else
+	export exit_button_tooltip="Stop playback and return to main menu. Or click the X above, and playback will continue without these controls"
+fi
+
+
+### get vars
+get_wids # get the window ids of the vlc windows
+
+#if [ "$wid" = "" ];then #070220121
+	# check if audio here, if audio, build audio_gui, run it, use vlc rcold, and use echo cmd | nc localhost 12345
+	#[ -s /tmp/vlc-gtk-playlist_$(whoami).m3u  -a "`wc -l /tmp/vlc-gtk-playlist_$(whoami).m3u | cut -f1 -d' '`" != "1" ] && show_playlist & #230213 list files given, and show playlist window
+#	exit 0 # file is probably not a video file, playlist is massive, or PC is really slow, so exit before doing anything
+#fi
+
+set_gtkrc #180213 set gtk styles here
+
+# get all wids that were returned get_wids into an array
+IN=$vlcwid
+set -- "$IN"
+OLDIFS=$IFS 
+IFS="\n"; declare -a vlcwids=($*)  # put all into an array $vlcwids
+IFS=$OLDIFS
+
+#BK vlc 1.0.x (or earlier) is slightly different...
+VLCVERSION=`vlc --version 2>&1 | grep '^VLC media player' | cut -f 4 -d ' ' | tr -d '.' | cut -c 1,2` #exs: 10, 11
+# added fixed check (while using vlc 2.2.4 from slacko6.9)
+[ "$VLCVERSION" = "" ] && export VLCVERSION=`vlc --version 2>&1 | grep 'VLC' | head -1 | cut -f3 -d ' ' | tr -d '.' | cut -c 1,2`
+[ "$VLCVERSION" = "" ] && VLCVERSION=9 #ex 0.9.8.
+
+#290812 - show channel selection in OSC if playing a stream
+STREAM_CONTROLS=''
+if [ "$OSC" = "stream" ];then
+	FAVE_ITEMS='' #prevent double matching, re-build fave list below, keep it current
+	WIDTH=''
+	while read LINE
+	do  
+		if [ "${LINE%%|*}" != "$FAVE_STREAM" ];then
+			FAVE_ITEMS="`echo "$FAVE_ITEMS
+<item>${LINE%%|*}</item>"`"
+		fi
+	done <"$FAVES"
+	FAVE_ITEMS="$(echo "$FAVE_ITEMS" | sort)"
+	if [ "$FAVE_STREAM" != "" ];then
+		[ "$(cat $FAVES 2>/dev/null | grep "${FAVE_STREAM}|")" != "" ] && FAVE_ITEMS="<item>$FAVE_STREAM</item>
+$FAVE_ITEMS"
+	fi
+	#040213 add STREAM_URL2 to top of fave streams list.. now we can pass it to record_fave
+	if [ "$STREAM_URL2" != "" -a "$STREAM_URL2" != "http://" -a "$STREAM_URL2" != "mms://" -a "$STREAM_URL2" != "rtp://" -a "$STREAM_URL2" != "rtsp://" ];then 
+		FAVE_ITEMS="<item>$STREAM_URL2</item>
+$FAVE_ITEMS"
+	fi
+	# create the fave stream list for OSC
+	#040213 added a record button, can now record the stream selected in the list, no playback interruption
+	#190213 adjustable width for stream list, STREAMLIST_WIDTH
+	STREAM_CONTROLS='<hbox>
+	<combobox tooltip-text="Choose your favourite internet media stream." width-request="'${STREAMLIST_WIDTH:-100}'">
+		<variable>FAVE_STREAM_URL</variable>
+			'${FAVE_ITEMS:-None}'
+		</combobox>
+		<button relief="2" tooltip-text="Play the selected stream now">
+			<input file stock="gtk-media-play"></input>
+			<action>kill_vlc</action>
+			<action>RESETOSC=false PLAYNOW="'${PLAYNOW:true}'" play_fave &</action>
+			<action>resize_playback &</action>
+			<action>get_vlc_pids</action>
+		</button>
+		<button relief="2" tooltip-text="Stop the selected stream now">
+			<input file stock="gtk-media-stop"></input>
+			<action>killall -9 rtmpdump &>/dev/null</action>
+			<action>kill_vlc</action>
+		</button>
+		<button relief="2" tooltip-text="Record the selected stream to a file">
+			<input file stock="gtk-media-record"></input>
+			<action>record_fave &</action>
+		</button>
+		</hbox>'
+else
+	RESETOSC=true # close main GUI and reload OSC
+	# create file controls for OSC
+	FILE_CONTROLS='<hbox homogeneous="true">
+		<button relief="2" tooltip-text="Previous item">
+			<input file stock="gtk-media-previous"></input>
+			<action>xdotool key --window '$wid' p 2>/dev/null</action>
+			<action>sleep 0.3</action>
+			<action>resize_playback &</action>
+		</button>
+		<button relief="2" tooltip-text="Search backward">
+			<input file stock="gtk-media-rewind"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' ctrl+Left 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="Play/Pause">
+			<input file stock="gtk-media-play"></input>
+			<action>xdotool key --window '$wid' space 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="Search forward">
+			<input file stock="gtk-media-forward"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' ctrl+Right 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="Next item">
+			<input file stock="gtk-media-next"></input>
+			<action>xdotool key --window '$wid' n 2>/dev/null</action>
+			<action>sleep 0.3</action>
+			<action>resize_playback &</action>
+		</button>'
+fi
+
+#100913 move here. not in func
+#show_playlist () { #230213, if no VLC window, get list of files currently playing (set in vlc-gtk), and output GUI to control them (not OSC)
+	cat /tmp/vlc-gtk-playlist_$(whoami).m3u 2>/dev/null | sort | while read LINE #020313 sort the list
+	do
+		#250213 updates to playlist filtering: accept only audio files, no dirs
+		[ -d "$LINE" ] && continue
+		#280213 improved list, separate files and dirs, insensitive extensions check #100913 added video extensions
+		[ -f "$LINE" -a "`echo "$LINE" | grep -iE ".264\$|.3gp\$|.3gp2\$|.arf\$|.asf\$|.asx\$|.avi\$|.dat\$|.divx\$|.dv\$|.dv-avi\$|.f4v\$|.flv\$|.gvi\$|.h264\$|.m21\$|.m2p\$|.m2v\$|.mkv\$|.mov\$|.mp4\$|.mpg\$|.mpeg\$|.mpv\$|.rm\$|.rmvb\$|.vob\$|.wmv\$|.xvid\$|.au\$|.amr\$|.gsm\$|.m4p\$|.m4b\$|.mpa\$|.mp3\$|.m4a\$|.flac\$|.ogg\$|.mp2\$|.rm\$|.ra\$|.tta\$|.wav\$|.wma\$"`" != "" ] && echo "`basename "$LINE"`|`dirname "$LINE"`" >> "/tmp/vlc-gtk-playlist_$(whoami)1"
+	done
+	cat "/tmp/vlc-gtk-playlist_$(whoami)1" 2>/dev/null | sort | uniq > /tmp/vlc-gtk-playlist_$(whoami).m3u #020313 sort the new list the remove the old one #130913
+	rm -f "/tmp/vlc-gtk-playlist_$(whoami)1" &>/dev/null
+	tmp_m3u () { #280213 when user clicks on a playlist item, builds tmp playlist with only the current item and all following items
+		echo "$FILE" #add current fle to top of tmp playlist
+		#read whole playlist, keep only current file and the rest after it (sed), build proper paths, and return the list
+		cat /tmp/vlc-gtk-playlist_$(whoami).m3u | sort | sed -n "/$TREE/,+999p" | grep -vi "$TREE" | while read line
+		do
+			NAME="`echo "$line" | cut -f1 -d'|'`"; DIR="`echo "$line" | cut -f2 -d'|'`"; echo "$DIR/$NAME"
+		done #020313 sort the list
+	}
+	#250213 play first item in list, if multiple items
+	#[ "`wc -l /tmp/vlc-gtk-playlist_$(whoami).m3u | cut -f1 -d' '`" = 1 ] || ( kill_vlc ; FILE="`cat /tmp/vlc-gtk-playlist_$(whoami).m3u | head -1`"; export FILE; UPDATE_PLAYLIST=false GUITAB=$GUITAB play_file "$FILE" ; get_vlc_pids )
+	PLAYLIST_GUI='
+	  <tree hover-selection="true" icon="vlc" exported-column="0">
+		<label>File|Dir</label>
+		<height>150</height>
+		<variable>TREE</variable>
+		<input>cat /tmp/vlc-gtk-playlist_$(whoami).m3u 2>/dev/null</input>
+		<action signal="button-release-event">if [ "$TREE" != "" ];then kill_vlc; . "$CONFIG"; FILE="`cat /tmp/vlc-gtk-playlist_$(whoami).m3u | grep -m1 "^${TREE}" |cut -f1 -d"|"`"; FILEDIR="`cat /tmp/vlc-gtk-playlist_$(whoami).m3u | grep -m1 "^${TREE}" |cut -f2 -d"|"`"; FILE="${FILEDIR}/${FILE}"; export FILE; echo "`tmp_m3u`" > /tmp/vlc-gtk-tmp_$(whoami).m3u; run_vlc tmpm3u; get_vlc_pids; fi; </action>'
+	[ "$wid" != "" ] && PLAYLIST_GUI=${PLAYLIST_GUI}'<action signal="button-release-event">sleep 0.20; resize_playback</action>' 
+	 PLAYLIST_GUI=${PLAYLIST_GUI}'</tree>'
+	  
+	export PLAYLIST_GUI
+
+	#100913 we only need to create the gtkdialog XML for later
+	#if [ ! -f /tmp/vlc-gtk-playlist_$(whoami)-on ];then
+		# kill the main GUI and prev OSC
+		#GUIPID=`cat $GUIPIDFILE`; kill $GUIPID &>/dev/null 
+		#touch /tmp/vlc-gtk-playlist_$(whoami)-on
+		#[ "$GTKDIALOG" = "" ] && GTKDIALOG=gtkdialog
+		#$GTKDIALOG -c -p PLAYLIST_GUI &
+		#rm /tmp/vlc-gtk-playlist_$(whoami)-on &>/dev/null
+	#fi
+	#exit 0
+#}
+
+# build controls #040213 added vlc icon to OSC gui
+export VLC_CONTROLS='<window icon-name="vlc" title="'$APPNAME' OSC" width-request="'$WIDTH'"><vbox>' #290812 changes below - show either steam list or file controls
+
+	#if [ "$wid" != "" ];then #disable, we want SOC to show for audio streams too
+		[ "$OSC" = "stream" ] && VLC_CONTROLS="${VLC_CONTROLS}${STREAM_CONTROLS}" || VLC_CONTROLS="${VLC_CONTROLS}${FILE_CONTROLS}"
+	#fi
+	#100913 only add OSC buttons if playing a video ($wid != "") #131913 suppress xdotool output... theres a lot of it!
+	[ "$wid" != "" ] && VLC_CONTROLS="${VLC_CONTROLS}"'<button relief="2" tooltip-text="Enable fullscreen, double click on the screen to return to a window">
+			<input file stock="gtk-fullscreen"></input>
+			<action>xdotool key --window '$wid' f 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="Toggle aspect ratio settings">
+			<input file stock="gtk-bold"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' a 2>/dev/null</action>
+			<action>resize_playback &</action>
+ 		</button>
+		<button relief="2" tooltip-text="Toggle crop settings">
+			<input file stock="gtk-cut"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' c 2>/dev/null</action>
+			<action>resize_playback &</action>
+ 		</button>
+		<button relief="2" tooltip-text="Auto resize and align the video and controls windows">
+			<input file stock="gtk-zoom-fit"></input>
+			<action>resize_playback &</action>
+ 		</button>
+		<button relief="2" tooltip-text="Volume up">
+			<input file stock="gtk-go-up"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' ctrl+Up 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="Volume down">
+			<input file stock="gtk-go-down"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' ctrl+Down 2>/dev/null</action>
+		</button>'
+		#100913 only add OSC buttons if playing a video ($wid != "")
+		[[ "${VLCVERSION}" -lt 11  ]] && [ -a "$wid" != "" ] && VLC_CONTROLS=${VLC_CONTROLS}'<button relief="2" tooltip-text="Toggle subtitles, if enabled">
+			<input file stock="gtk-italic"></input>
+			<action>xdotool key --window '$wid' k 2>/dev/null</action>
+		</button>'
+		#100913 only add OSC buttons if playing a video ($wid != "")
+		[ "$wid" != "" ] && VLC_CONTROLS=${VLC_CONTROLS}'<text width-request="3"><label>""</label></text>
+
+		<button relief="2" tooltip-text="Video position and duration">
+			<input file stock="gtk-info"></input>
+			<action>xdotool key --window '$wid' t 2>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="'${exit_button_tooltip}'">
+			<input file stock="gtk-quit"></input>
+			<action>xdotool key --clearmodifiers --window '$wid' ctrl+q 2>/dev/null</action>
+			<action>get_vlc_pids 2>/dev/null; kill_vlc 2>/dev/null</action>'
+
+			#171012 comment out below, not needed now we have the loop checking PIDs, at the bottom of the script
+			#[ "$PLAYNOW" = false ] && VLC_CONTROLS=${VLC_CONTROLS}'<action>'$SELF' --tab '$GUITAB' &</action>'
+			#151012	use kill_vlc
+			[ "$wid" != "" ] && VLC_CONTROLS=${VLC_CONTROLS}'<action type="exit">EXIT_NOW</action>
+		</button>
+	</hbox>'
+	#[ "$wid" = "" ] && 
+	PLAYLIST_GUI=$PLAYLIST_GUI'<hbox homogenous="true">
+		<text homogenous="true"><label>Click on a file to play it                                           </label></text>
+		<button relief="2">
+			<input file stock="gtk-stop"></input>
+			<label>Stop Playback</label>
+			<action>kill_vlc</action>
+			<action>export OSCPID=`cat $OSCPIDFILE`; kill $OSCPID &>/dev/null</action>
+		</button>
+		<button relief="2" tooltip-text="'${exit_button_tooltip}'">
+			<input file stock="gtk-quit"></input>
+			<action>kill_vlc</action>
+			<action>rm -f /tmp/vlc-gtk-playlist_$(whoami)-on &>/dev/null</action>'
+			#100913 only add OSC buttons if playing a video ($wid != "")
+			[ "$wid" = "" -a "$PLAYNOW" = false ] && PLAYLIST_GUI=${PLAYLIST_GUI}'<action>'$SELF' --tab '$GUITAB' &</action>'
+			[ "$wid" = "" ] && PLAYLIST_GUI=${PLAYLIST_GUI}'<action type="exit">EXIT_NOW</action>
+		</button>
+	  </hbox>'
+	#100913 add the playlist GUI to the OSC if audio files are being played, or if more than one file is playing..  and dont show it if playing a stream
+	if [ "$OSC" != "stream" -a "`cat /tmp/vlc-gtk-playlist_$(whoami).m3u 2>/dev/null`" != "" ];then #130913 dont add empty playlist to OSC
+		[ "$wid" = "" ] && VLC_CONTROLS=${VLC_CONTROLS}$PLAYLIST_GUI
+	fi
+VLC_CONTROLS=${VLC_CONTROLS}'</vbox>
+</window>'
+#echo "$VLC_CONTROLS" /tmp/VLC_CONTROLS
+export VLC_CONTROLS
+
+# run the controls GUI #151012 updates  
+#if [ "$wid" != "" ];then  #100913 commented out, run even when no wid, cos it's now combined with the playlist gui
+	#rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 remove the playlist file, cos we dont need it, it'll be out of date #100913, no dont, we need it now
+	# kill the main GUI and prev OSC
+	GUIPID=`cat $GUIPIDFILE 2>/dev/null`; kill $GUIPID &>/dev/null 
+	#OSCPID=`cat $OSCPIDFILE`; kill $OSCPID &>/dev/null #151012 #161012 dont kill it, cos the OSC no longer affects newer process
+	$GTKDIALOG -s <<< "$VLC_CONTROLS" & #070220122
+	echo $! > $OSCPIDFILE #270712 store PID of OSC (for killing/restarting OSC)
+	unset VLC_CONTROLS
+#fi
+
+get_osc_wid () { # get the wid of the on-screen gtkdialog controls
+for i in 1 2 3 4 5 6 7 8 9 10 #240213 faster, more checks #020313 fewer checks
+do
+	if [ "$guiwid" = "" ];then
+		sleep 0.10 #BK change 1 to 0.25 #240213 down to 0.10 
+		guiwid="`xdotool search --name "$APPNAME OSC"`" 2>/dev/null #020313 changed title
+	else
+		export guiwid="$(echo "${guiwid// /\n}" | tail -1)" #161012
+		break
+	fi
+done
+}
+get_osc_wid
+
+#debug_btns # print stuff to log file
+
+#[ "$wid" != "" ] && resize_playback # move and resize the playback window and controls #250213
+resize_playback # do it twice #050912, dont
+
+#minimize_vlc # minimize the other windows
+focus_vlc # focus on the vlc window
+
+# add right click menu to video window ### BROKEN FOR SOME REASON.. problem with xdotool?
+#xdotool search --name "$wid" behave %@ mouse-click exec 'woofy'
+
+# make playback controls appear whenever playback is focused on or maximised
+# also stops controls being minimized when playback window is visible
+#[ "$guiwid" ] && [ "$wid" ] && xdotool behave $wid focus windowactivate $guiwid
+
+#171012 kill the OSC if VLC has ended, return to main GUI if not PLAYNOW
+#040213 rewrite loop below, works a little better
+[ "$RUNVLC_PID" != "" ] && {
+	while [ 1 = 1 ];do
+	 if [ "$(ps | grep $RUNVLC_PID | grep -v grep)" != "" ];then
+		sleep 1
+	else
+		#sleep 3
+		get_vlc_pids #040213 very important, or OSC will exit when changing between files/streams
+		sleep 0.25
+		get_vlc_pids #040213 very important, or OSC will exit when changing between files/streams
+		sleep 0.25
+		[ "$RUNVLC_PID" = "" ] && break #130913
+		[ "$(ps | grep $RUNVLC_PID  2>/dev/null | grep -v grep)" != "" ] || break  #130913
+	 fi
+	done
+	OSCPID=`cat $OSCPIDFILE 2>/dev/null`; kill $OSCPID &>/dev/null 
+	[ -e "$SOPPIDFILE" ] && kill -9 `cat $SOPPIDFILE 2>/dev/null | head -1` &>/dev/null #231212 kill sopcasts as well
+	[ "$PLAYNOW" = false ] && $SELF --tab $GUITAB &
+}
+exit 0

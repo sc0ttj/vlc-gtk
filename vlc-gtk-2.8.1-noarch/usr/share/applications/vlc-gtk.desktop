@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=X-Multimedia-mediaplayer;
+Exec=vlc-gtk
+Icon=/usr/share/pixmaps/vlc.png
+Name=VLC-gtk - simple VLC frontend
+Type=Application
+Name[de]=VLC-gtk - einfach vlc menu
+Name[es]=VLC-gtk - sencilla interfaz de VLC
+Name[ru]=VLC-GTK - простой интерфейс VLC

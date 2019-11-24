@@ -1,0 +1,119 @@
+Live TV: National Geographic|rtmpdump -v -r rtmp://31.204.153.190/live -a live -f LNX 10,3,183,20 -W http://95.211.149.228/player/player-licensed.swf -p http://www.casti.tv/embed.php?v=tnatg -y tnatg
+Live TV: ABC HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00033.stream --live -y 00033.stream
+Live TV: Al Jazeera English|rtmpdump -v -r rtmp://aljazeeraflashlivefs.fplive.net/aljazeeraflashlive-live/aljazeera_eng_med
+Live TV: BBC World News|rtmpdump -v -r rtmp://a.cdn.msnbclive.eu/edge/bbcworld_vh -W http://msnbclive.eu/getswf.php?name=player.swf -p http://blog.livenewschat.tv/world-newsroom
+Live TV: Bloomberg|rtmpdump -v -r rtmp://cp116697.live.edgefcs.net:80/live/BnazlkNDpCIcD-QkfyZCQKlRiiFnVa5I_640_360_440@18679  -W http://player.ooyala.com/cacheable/c78f866930724ffedfe8cf5349712569/player_v2.swf -p http://tvpc.com
+Live TV: Cartoon Classics|http://72.13.93.186/cartoonclassics
+Live TV: Cartoon Network|rtmpdump -v -r rtmp://cdn.livecaster.tv/live -a live -f LNX 10,3,183,20 -W http://www.livecaster.tv/player/player.swf -p http://www.livecaster.tv/embed.php?u=cartoonnetlow -y cartoonnetlow.stream
+Live TV: CBS HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00012.stream --live -y 00012.stream
+Live TV: CCTV News, in English|mms://a529.l7906022528.c79060.g.lm.akamaistream.net/D/529/79060/v0001/reflector:22528
+Live TV: Channel 4 HD, UK|rtmpdump -v -r rtmp://rtsp-02.g-box.tv/live -a live -f LNX 10,3,183,20 -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/stream.php?n=c4_8384.sdp -y c4_8384.sdp
+Live TV: Channel 5, UK|rtmp://rtsp-02.g-box.tv/live/channel5_8500.sdp
+Live TV: Cinemax HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00004.stream --live -y 00004.stream
+Live TV: CNN International News|rtmpdump -v -r rtmp://a.cdn.msnbclive.eu/edge/cnni_live -W http://msnbclive.eu/getswf.php?name=player.swf -p http://blog.livenewschat.tv/international-room-chat
+Live TV: CNN|rtmpdump -v -r rtmp://a.cdn.msnbclive.eu/edge/cnn_live -W http://msnbclive.eu/player.swf  -p http://blog.livenewschat.tv/situation-chatroom
+Live TV: Comedy Central|rtmpdump -r rtmp://31.204.153.190/live -a live -f LNX 10,3,183,20 -W http://95.211.149.228/player/player-licensed.swf -p http://www.casti.tv/embed.php -y cood
+Live TV: Comedy Movies|http://72.13.93.186/classiclaughs
+Live TV: CSPAN1|rtmpdump -v -r rtmp://cp82346.live.edgefcs.net:1935/live -y CSPAN1@14845 -W http://www.c-span.org/cspanVideoHD.swf -p http://www.c-span.org/Live-Video/C-SPAN/
+Live TV: CSPAN2|rtmpdump -v -r rtmp://cp82347.live.edgefcs.net:1935/live -y CSPAN2@14846 -W http://www.c-span.org/cspanVideoHD.swf -p http://www.c-span.org/Live-Video/C-SPAN2/
+Live TV: CSPAN3|rtmpdump -v -r rtmp://cp82348.live.edgefcs.net:1935/live -y CSPAN3@14847 -W http://www.c-span.org/cspanVideoHD.swf -p http://www.c-span.org/Live-Video/C-SPAN3/
+Live TV: Dave HD, UK|rtmpdump -v -r rtmp://rtsp-02.g-box.tv/live -a live  -W http://www.skystreamlive.com/player/skystreamlive.com.swf  -p http://www.skystreamlive.com/stream.php?n=dave_22272.sdp  -f LNX 10,3,183,20  -y dave_22272.sdp
+Live TV: Discovery HD |rtmpdump -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com//player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00014.stream --live -y 00014.stream
+Live TV: Disney Channel|rtmpdump -v -r rtmp://live.ilive.to/redirect -a redirect -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y xxwt9pjxpgv4tu2
+Live TV: E4, UK|rtmp://rtsp-02.g-box.tv/live/e4_8448.sdp
+Live TV: ESPN 2 HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00013.stream --live -y 00013.stream
+Live TV: ESPN|mms://a3.v20473a.c20473.g.vc.akamaistream.net/7/3/20473/v0001/espn.download.akamai.com/20473/t_assets/20070217/4657511c3b57e3dc733def3701a3d94f38e6f132.wmv
+Live TV: EuroSport, France|rtmpdump -v -r rtmp://81.17.24.58:190/vod --playpath 50ehyqk50ehyoy --swfUrl http://31.7.62.218/player.swf --live --pageUrl http://www.dinozap.tv/redirect/
+Live TV: FOX 11 HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00001.stream --live -y 00001.stream
+Live TV: FOX 11|rtmpdump -v -r rtmp://198.154.96.141/live/00001.stream -W http://www.skyonetv.com/player/skyonetv.com.swf -p http://www.skyonetv.com
+Live TV: FOX Movies|rtmpdump -v -r rtmp://50.7.161.37/flash/tfxm  -W http://95.211.149.228/player/player-licensed.swf -p http://www.casti.tv
+Live TV: FOX News 8|rtmpdump -v -r rtmp://cp86438.live.edgefcs.net/live -a live -f LNX 10,3,183,20 -W http://cdn.livestream.com/chromelessPlayer/v21/playerapi.swf -p http://www.livestream.com/embed/fox8news -y livestream6_139@31225
+Live TV: FOX News|rtmpdump -v -r rtmp://176.31.231.124/edge/vjl7szzy9ztawjn  -W http://cdn.static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to
+Live TV: France24, English|rtmpdump -v -r rtmp://stream2.france24.yacast.net/france24_live/en -a france24_live/en -W http://www.france24.com/en/sites/all/mo … player.swf -p http://www.france24.com/en/aef_player_p … e24_player -y f24_liveen
+Live TV: France24, Francais|rtmpdump -v -r rtmp://stream2.france24.yacast.net/france24_live/fr -a france24_live/fr -W http://www.france24.com/fr/sites/all/mo … player.swf -p http://www.france24.com/fr/aef_player_p … e24_player -y f24_livefr
+Live TV: FreeSpeech.org TV|rtmpdump -v -r rtmp://download-now.net/vbrweb -a vbrweb -f LNX 10,3,183,20 -W https://www.freespeech.org/sites/all/libraries/mediaplayer-5.9-licensed/player.swf -p https://www.freespeech.org/ -y vbrweb.sdp
+Live TV: FX HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00003.stream --live -y 00003.stream
+Live TV: HBO HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00011.stream --live -y 00011.stream
+Live TV: HBO|rtmpdump -v -r rtmp://198.154.96.141/live/00011.stream  -W http://www.skyonetv.com/player/skyonetv.com.swf -p http://www.skyonetv.com
+Live TV: HDTV1, Czech Republic|http://stream.hdtv1.cz/
+Live TV: History Channel|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y notzlkijdubh0bd
+Live TV: Island TV|rtmpdump -v -r rtmp://cp86438.live.edgefcs.net/live -a live -f LNX 10,3,183,20 -p http://www.livestream.com/embed/islandtvlive -W http://cdn.livestream.com/chromelessPlayer/v21/playerapi.swf?autoPlay=true -y livestream6_146@41333
+Live TV: Movie City HD|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 874d69ibkcgpzbg
+Live TV: MSNBC|rtmpdump -v -r rtmp://a.cdn.msnbclive.eu/edge -y msnbc_live -W http://msnbclive.eu/getswf.php?name=player.swf -p http://www.rentadrone.tv/msnbc-live-rockinroosters/
+Live TV: MTV HD|rtmpdump -v -r rtmp://198.154.96.141/live -f LNX 10,3,183,20 -a live -W http://www.skystreamlive.com//player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00011.stream -y 00011.stream
+Live TV: NASA TV 1|rtmpdump -v -r rtmp://cp39920.live.edgefcs.net:1935/live/nasahd@55196 -W http://www.ustream.tv/flash/viewer.swf 
+Live TV: NASA TV 2|rtmpdump -v -r rtmp://ustreamlivefs.fplive.net/ustream3live-live/stream_live_6_1_6540154 -W http://static-cdn1.ustream.tv/swf/live/viewer.rsl:255.swf 
+Live TV: NASA TV|mms://a1816.l1856941815.c18569.g.lm.akamaistream.net/D/1816/18569/v0001/reflector:41815
+Live TV: National Cannabis Radio|rtmpdump -v -r rtmp://212-110.livestream.com/mogulus-stream-edge/nationalcannabisradio -a mogulus-stream-edge/nationalcannabisradio -f LNX 10,3,183,20 -W http://cdn.livestream.com/chromelessPlayer/v21/playerapi.swf?autoPlay=true -p http://www.livestream.com/embed/nationalcannabisradio -y rtmp://212-49.livestream.com/affiliateStream/nationalcannabisradio/6c69766572657065617465723a72746d703a2f2f3231322d34392e6c69766573747265616d2e636f6d2f6d6f67756c75732f6e6174696f6e616c63616e6e61626973726164696f2f727573733432303432303030303032303132303830322d3033353032332d6d656469756d5f363738
+Live TV: NBC HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00006.stream --live -y 00006.stream
+Live TV: O2TV, Czech Republic|http://streaming.o2active.cz/o2tvinfo_high
+Live TV: Russia Today News, Arabic|rtmpdump -v -r rtmp://russiatoday.fms.visionip.tv/rt/Russia_al_yaum_1000k_1 -a rt/Russia_al_yaum_1000k_1 -W http://arabic.rt.com/style/liveplayer.swf -p http://arabic.rt.com/live_high -y 1000k_1
+Live TV: Russia Today News, English|rtmpdump -v -r rtmp://fms5.visionip.tv/live -a live -W http://rt.com/s/swf/player5.4.viral.swf -p http://rt.com/on-air/ -y RT_2
+Live TV: Russia Today News, Spanish|rtmpdump -v -r rtmp://rt.fms.visionip.tv/live/ -a live -W http://actualidad.rt.com/swf/player.swf -p http://actualidad.rt.com/mas/envivo/ -y RT_Spanish_2
+Live TV: Showtime HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00010.stream --live -y 00010.stream
+Live TV: Sky News|mms://live1.wm.skynews.servecast.net/skynews_wmlz_live300k 
+Live TV: Sky Sports 1|rtmpdump -v -r rtmpe://95.211.188.38/live -W http://www.launchlive.tv/player/player-licensed.swf -p http://www.launchlive.tv/embed.php?v=dsdsdsds99&vw=570&vh=400 --live -y dsdsdsds99
+Live TV: Sky Sports 2|rtmpdump -v -r rtmpe://95.211.188.38/live -W http://www.launchlive.tv/player/player-licensed.swf -p http://www.launchlive.tv/embed.php?v=regegrrthwer&vw=570&vh=400 --live -y regegrrthwer
+Live TV: Sky Sports 3|rtmpdump -v -r rtmpe://95.211.174.130/live -W http://www.launchlive.tv/player/player-licensed.swf -p http://www.launchlive.tv/embed.php?v=tsjsrjrhsdagf&vw=570&vh=400 --live -y tsjsrjrhsdagf
+Live TV: Sky Sports 4|rtmpdump -v -r rtmpe://95.211.188.38/live -W http://www.launchlive.tv/player/player-licensed.swf -p http://www.launchlive.tv/embed.php?v=tsjsrjrhsdagf&vw=570&vh=400 --live -y tsjsrjrhsdagf
+Live TV: Spike TV|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y zmt2swezlswh9nz
+Live TV: SyFy HD|rtmpdump -v -r rtmp://198.154.96.141/live -a live -W http://www.skystreamlive.com//player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00007.stream -f LNX 10,3,183,20 -y 00007.stream
+Live TV: The Wildlife Channel|http://rs4wms.i2ic.com/wlc_2500
+Live TV: TNT HD|rtmpdump -v -r rtmp://198.154.96.141/live -W http://www.skystreamlive.com/player/skystreamlive.com.swf -p http://www.skystreamlive.com/channel.php?n=00008.stream --live -y 00008.stream
+Live TV: TNT Movies|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 2zw54vppbepmfad
+Live TV: TNT|rtmpdump -v -r rtmp://198.154.96.141/live/00008.stream  -W http://www.skyonetv.com/player/skyonetv.com.swf -p http://www.skyonetv.com
+Radio: Absolute Radio 60s|http://www.radiofeeds.co.uk/a648mp3.m3u
+Radio: BBC Asian Network|http://bbc.co.uk/radio/listen/live/ran.asx
+Radio: BBC Radio 1|http://bbc.co.uk/radio/listen/live/r1.asx
+Radio: BBC Radio 1Xtra|http://bbc.co.uk/radio/listen/live/r1x.asx
+Radio: BBC Radio 2|http://bbc.co.uk/radio/listen/live/r2.asx
+Radio: BBC Radio 3|http://bbc.co.uk/radio/listen/live/r3.asx
+Radio: BBC Radio 4|http://bbc.co.uk/radio/listen/live/r4.asx
+Radio: BBC Radio 4Xtra|http://bbc.co.uk/radio/listen/live/r4x.asx
+Radio: BBC Radio 5 Live|http://bbc.co.uk/radio/listen/live/r5l.asx
+Radio: BBC Radio 5 Live Sports Extra|http://www.bbc.co.uk/radio/listen/live/r5lsp_aaclca.pls
+Radio: BBC Radio 6|http://bbc.co.uk/radio/listen/live/r6.asx
+Radio: BBC World Service|http://www.bbc.co.uk/worldservice/meta/tx/nb/live/eneuk.asx
+Radio: Classic FM|http://media-ice.musicradio.com/ClassicFMMP3.m3u
+Radio: DFM Indie Music, Amsterdam|http://dfm.nu/dfm_1.m3u
+Radio: Federal News Radio - Washington DC|http://playerservices.streamtheworld.com/pls/WFEDAM.pls
+Radio: FreethoughtRadio.com|http://rs4.radiostreamer.com:9110/
+Radio: Heart FM - London|http://media-ice.musicradio.com/HeartLondonMP3.m3u
+Radio: InfoWars.com|http://www.infowars.com/infowars.asx
+Radio: KABC AM - Los Angeles Radio|http://www.live-radio.net/redirfeed.php3?Id=18922910
+Radio: KCRW California|http://media.kcrw.com/live/kcrwlive.pls
+Radio: KEXP FM Independent Music Station, Washington|http://kexp-mp3-2.cac.washington.edu:8000/
+Radio: National Public Radio USA|http://www.npr.org/templates/dmg/dmg.php?getProgramStream=true&NPRMediaPref=WM
+Radio: Old Time Radio|http://www.otrfan.com:8000/stream.m3u
+Radio: Ostrava Radio, CZ|http://www.rozhlas.cz/audio/download/croostrava-128.asx
+Radio: Sky.fm Classic Rap|http://www.sky.fm/aacplus/classicrap.pls
+Radio: Sky.fm Classic Rock|http://www.sky.fm/aacplus/classicrock.pls
+Radio: Sky.fm Roots Reggae| http://www.sky.fm/aacplus/rootsreggae.pls
+Radio: Sky.fm Top Hits|http://www.sky.fm/aacplus/tophits.pls
+Radio: The Voice of Russia Radio|http://playerservices.streamtheworld.com/pls/RUVR_ENG.pls
+Radio: WABC 77 Talk Radio|http://www.live-radio.net/redirfeed.php3?Id=18924589
+Radio: WAMU Public Radio, Washington DC|http://wamu.org/streams/live/1/live_aac.pls
+Radio: WBUR Boston Public Radio|http://audio.wbur.org/stream/live_mp3.pls
+Radio: WCPE Classical Music|http://www.ibiblio.org/wcpe/wcpe.pls
+TV Archives: ABC Kids 1|mms://media4.abc.net.au/broadbandkids/20070521_1500/story1hi.wmv
+TV Archives: ABC Kids 3|mms://media4.abc.net.au/broadbandkids/20070521_1500/story6hi.wmv
+TV Archives: BBC Daily Politics|mms://rmv8.bbc.net.uk/news/olmedia/n5ctrl/tvseq/od/bbc2/bb/wm/video/daily_pol_bb.wmv
+TV Archives: BBC Newsnight|mms://rmv8.bbc.net.uk/news/olmedia/n5ctrl/tvseq/od/bbc2/bb/wm/video/newsnight_bb.wmv
+Live TV: Movie Super|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 874d69ibkcgpzbg 
+Live TV: Movie 1|rtmpdump -v -r rtmp://176.31.231.124/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y bs3z5tu4h14q5ly 
+Live TV: A and E|rtmpdump -v -r rtmp://176.31.231.57/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y at89h1bs45p5j5h 
+Live TV: Movies HBO|rtmpdump -v -r  rtmp://176.31.231.124/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y z28ie9oqoku4qoy 
+Live TV: Discovery|rtmpdump -v -r  rtmp://176.31.231.57/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 4urzgsozilyle83 
+Live TV: Family Guy|rtmpdump -v -r  rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y xwdhqeyhz6hek7u 
+Live TV: Movies Sifi Horror|rtmpdump -v -r rtmp://176.31.231.124/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y kdcazjd8awpwkgb 
+Live TV: Movies Comedy|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y a1wn1j3ra1w0cv0 
+Live TV: Movies StarZ|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 8g7x80ozu6hz2ds 
+Live TV: Movies Action|rtmpdump -v -r rtmp://176.31.231.57/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 89q9ebwqdp2pkut 
+Live TV: Bleach|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y cqq87pn1lkxra4k 
+Live TV: WWE PPV|rtmpdump -v -r rtmp://176.31.231.57/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y i6v9xr1b3u8fc3u 
+Live TV: Movies True|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y w0lygboj3rj3nbr 
+Live TV: Bleach 1|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y wjqv7iw4g6qf1sy 
+Live TV: South Park|rtmpdump -v -r rtmp://46.105.115.183/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y obnfjkmhudvbxqt 
+Live TV: AMC|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y la20uo8un252id9 
+Live TV: Friends Show|rtmpdump -v -r rtmp://46.105.109.122/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y wg2fmaake2sfjbr 
+Live TV: DragonBallz|rtmpdump -v -r rtmp://176.31.231.57/edge -a edge -f LNX 10,3,183,20 -W http://static.ilive.to/jwplayer/player_embed.swf -p http://www.ilive.to/embedplayer.php -y 8aplmwsbez7rack

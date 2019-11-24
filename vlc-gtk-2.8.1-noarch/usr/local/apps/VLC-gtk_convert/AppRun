@@ -1,0 +1,5 @@
+#!/bin/sh
+NEWRC="`sed '/CAP_TYPE/s/true/false/g' ~/.vlc-gtk/vlc-gtkrc`"
+echo "$(echo "$NEWRC" | sed 's/CAP_TYPE_FILE=false/CAP_TYPE_FILE=true/')" > ~/.vlc-gtk/vlc-gtkrc
+exec vlc-gtk --tab 3 --open "$@"
+exit 0

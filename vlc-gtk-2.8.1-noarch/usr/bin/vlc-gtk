@@ -1,0 +1,2841 @@
+#!/bin/bash
+# vlc-gtk by sc0ttman/sc0ttj, 2012
+# released under GPL - do whatever  you want with it, no permission required
+# description: a small gtkdialog based frontend for VLC media player
+# requires: xdialog, gtkdialog, xdotool, rtmpdump, sp-sc, vlc 0.86 or higher, vlc 1.0.0 or higher recommended
+#110108, 110110 BK: mods to work in wary 5.0, vlc 1.1.5.
+# 03022012: now supports pmusic_CD, not pCD.. better fullscreen support, see vlc-gtk-osc: resize_playback, prev/next btns
+#070220121: better disc checking for DVDs and CDs
+#070220122: faster gtkdialog exec
+#070220123: small fix for VCD playback
+#070220124: make file>open much easier, go to dir of last played stuff
+#120428: faster disabling of OSC GUI
+#1204281: better DVD, VCD handling, added dialog
+#120429: fixed accept file or dir as only option to start immediate playback
+#270712: updates to viewing, adding, deleting favourites streams, improvements in restarting GUI
+#280712: fixes in removing name from $STREAM_URL, keep only URL
+#310712: add support for rtmpdump streams, in fave streams list, piped to vlc
+#020812 use cvlc as player, fixes for live streams, re-organize streams tab in GUI, kill rtmpdump in kill_vlc, added tooltip to stream URL input
+#030812 add more network options to rtmpdump streams, includes stream title
+#040812 GUI fixes, play rtmpdump cmds with 'Play URL' button, show last used tab in GUI restart, show last played stream at top of fave list
+#050812 added 'record' button for favourite streams, new function record_fave, uses xdialog tailbox, related fixes in play_file
+#060812 small fixes for downloading, managing and playing stream files, dont kill playback when downloading steams
+#070812  fixes for creation of files in /tmp: added user to filename so user dont overwrite each others files
+#080812 fixed Play URL + add to faves, use only play_url OR write_fave; fixed showing deleted streams in list; fixed delete_fave; quit btn no longer kills playback (use 'Stop Playback' btn)
+#100812 added option subtitle delay, 2 options for old and new VLCs
+#120812 updated record_fave: save all streams to a file, not only rtmpdump cmds, using vlc --sout if not rtmpdump,
+#280812 xv now default video output, fixed default tab selection, added VLC version info to top-right of GUI, removed hidden FILE_OPEN button at top of GUI
+#250812 fixed getting VLC version info
+#290812 set $OSC ("stream" or "file") when starting OSC.. get $RESETOSC from vlc-gtk-osc in play_fave - dont reset OSC if play_fave ran from vlc-gtk-osc
+#010912 fixed, don't reset previous options
+#020912 new: video title to OSD positioning, Advanced tab, debugger, logfile, equalizer, related fixes in execute(), cli stuff, etc..
+#030912 new func 'run_vlc' -  will exec kill_vlc() and execute() then the given vlc command, added user options $C to all vlc cmds, more cleanups, fixes for debug mode,
+#050912 kill resize_playback func, in kill_vlc
+#060912 OSC added to execute, exported before running OSC, 'OSC' btn uses new func launch_osc, which loads correct OSC type
+#110912 fixed vlc-gtk [URL], play stream urls and rtmpdump cmds immediately if only option given.. updated --help output
+#220912 support play/download youtube URLs, needs vlc+lua, append URL with &fmt=18 (360p mp4, play), or &fmt=34 (360p flv. dwnld)
+#230912 fixes in youtube streaming and recording
+#240912 better gui, fixes for immediate playback in CLI interface, network tab+settings, added more advanced options, more fixes
+#250912 support urls without http://, starting www. or ending .m3u .pls .aspx .wmv
+#041012 added 'Capture' tab, with lots of transcoding outputs, can output to file, for now
+#061012 fixed kill capture PIDs, fixed debugger handling, more capture settings, fixes in capture executions, fixes in transcoding options
+#081012 added Dir option to Capture tab, can batch transcode files in $DIR
+#091012 fixes for killing the download progress dialogs for file/dvd/dir/screen trancoding, ask to play all converted files, no kill_vlc before every run_vlc cmd
+#101012 fixed building $CAP_DIR directory path, added $MAXWAIT to capture progress, fixes for building audio only files/file extensions
+#111012 rename mp4 files to m4a if they contain only audio
+#121012 GUI fixes, fixed screen:// fps in run_vlc, better logging uses -vvv, added dvdsimple option, disable OSC if xdotool not installed, renamed OSC file to vlc-gtk-osc, renamed 1st tab title
+#131012 fixes for video output, force X11 if trying to use xvideo, but only if using 'vesa' Xorg module or Xvesa server
+#151012 fixes for multiple instances, killing vlc: improved kill_vlc, dont use killall, kill most recent vlc process only.. also, no hardcoded tmp files
+#161012 support for multiple instances, more useful workdir, streams download to workdir, allow comments in VLCGTKGUI, moved kill OSCPID to the Stop Playback button, fixes play btn in stream OSC
+#171012 added vlc://quit to most cmds, OSC will detect when VLC ends, then OSC will quit
+#171012 renamed 'Duration' to 'Timer', more capture options (size, format, aspect), added info about workdir
+#181012 all vlc cmds assign their PID to $RUNVLC_PID; more CAP_FORMAT transcode formats; fixed WORKDIR=. ; disable CAP_FORMAT if no video;
+#201012 added license; added support for start/stop times in CAP_DURATION; added fixed Flv, Youtube, DVD formats to CAP_FORMAT list; GUI fixes for capture tab; updated tooltips;
+#231212 play & record SopCast URLs (needs sp-sc), GUI fixes, extra URL check when running play_url, set workdir
+#040213 fixed bad workdirs, set font size in gtk theme, updated help info; updated play_url: passes STREAM_URL2 to OSC; updated play_fave: clears STREAM_URL2 in OSC; fixed launch_osc: get vlc pids before running OSC
+#090213 exit right away if VLC not installed.. duh..
+#180213 fixed gtkrc stuff: path to file, renamed func, set icon size.. fixes for WORKDIR in write_config..
+#210213 added captureurl, can now transcode any playable url (ie convert any youtube URL to mp3 file)..
+#230213 added UPDATE_PLAYLIST (supports new OSC gui for audio files).. fixes in local playlist detection.. yet more WORKDIR fixes: in write_config, reload rcfile in set_workdir.. fixed output in kill_vlc.. fixed reset rcfile..
+#240213 fixed: update playlist when loading newly captured/converted file.. fixed: update playlist on by default.. fixed: update playlist only after disc found.. fix: stream playback/download wont replace current playlist..
+#250213 fixed: naming of playlist file..
+#260213 fixed find gtkdialog.. fixes for bash3 in redirection to logfile..
+#270213 fixes for older vlcs and vlc2: --network-caching, --fmpeg-fast,--spu.. added SAVEDIR.. fixes for WORKDIR (now current dir of last played item)..
+#280213 fixed audio playlist will auto play next file in list, added tmpm3u to run_vlc.. updated help info in main gui.. fixed removed --clock-synchro for vlc portability..
+#010213 more vlc portability fixes for stream caching and vlc://quit.. added PID to capture progress gui..
+#020313 fixed playlist creation in play_dir.. fixed sopcast check..
+#100913 combined OSC and Audio Playlist GUI.. Use m3u playlist for all mulitple file playback operations, better sorting of playlists..
+#110913 fixed non-alphanumeric chars ()<>&* in dir and filenames in GUI..
+#130913 fixes in getting vlc pids.. use <edit> box to show stream info, so user can copy & paste it
+#170913 updated writing of playlist, faster..
+
+{ #set vars
+# get gtkdialog version #260213 updated
+for A in gtkdialog4 gtkdialog3 gtkdialog; do
+	[ "`which $A 2>/dev/null`" != "" ] && export GTKDIALOG=$A && break
+	GTKDIALOG=''
+done
+#[ "$(which gtkdialog4)" = "" ] && export GTKDIALOG="gtkdialog4" || export GTKDIALOG="gtkdialog" #020912
+
+#020313 get sopcast binary, its name changed a few times
+for A in sp-sc sp-auth-sc sp-auth; do
+	[ "`which $A 2>/dev/null`" != "" ] && export SOPCASTBIN=$A && break
+	SOPCASTBIN=''
+done
+
+# set the default config dir, log files, etc #151012 updated tmp files
+export VLCPIDFILE=/tmp/vlc-gtk_cvlcpids_$(whoami) #151012 store pids of vlc in list, used by kill_vlc
+export GUIPIDFILE=/tmp/vlc-gtk_guipid_$(whoami)
+export OSCPIDFILE=/tmp/vlc-gtk_oscpid_$(whoami)
+export STREAMDWNLDFILE=/tmp/vlc-gtk_streamdwnld_$(whoami)
+export CAPTUREFILE=/tmp/vlc-gtk_capture_$(whoami)
+export SOPPIDFILE=/tmp/vlc-gtk_soppids_$(whoami) #231212
+#export WORKDIR=${HOME} #161012 more useful workdir #231212 better solution, use config file, user can set themselves
+export CONFIG=${HOME}/.vlc-gtk/vlc-gtkrc
+export FAVES=${HOME}/.vlc-gtk/vlc-gtk-faves
+
+# set the default gui vars and actions
+export SELF="$(basename $0)" # add this var, and export it, cos $0 doesnt work in funcs run as background processes
+export APPNAME='VLC-GTK'
+[ "$SELF" = "pupvlc" ] && APPNAME=PupVLC #240912
+export APPVER='2.8.1'
+export FAVE_ITEMS=''
+export TAB="0"
+export GUITAB='' #240812 reset default gui tab - stops Streams tab becoming default when it shouldnt
+export PLAYNOW=false
+export RESETOSC=true #290812 reset on screen controls, true if playing files/dirs, false if playing streams
+export UPDATE_PLAYLIST=true #230213 do not build playlist item by default, this is only enabled when calling VLC from main GUI #240213 enable by default
+export vlcgtkwid=''
+export VLC_VER="$(vlc --version 2>&1| grep '^VLC media player' | cut -f4 -d' ')" #240812 #250812 updated, get VLC version, added into --help output and in GUI
+
+#BK vlc 1.0.x (or earlier) is slightly different...
+export VLCVERSION=`vlc --version 2>&1 | grep '^VLC media player' | cut -f 4 -d ' ' | tr -d '.' | cut -c 1,2` #exs: 10, 11
+# added fixed check (while using vlc 2.2.4 from slacko6.9)
+[ "$VLCVERSION" = "" ] && export VLCVERSION=`vlc --version 2>&1 | grep 'VLC' | head -1 | cut -f3 -d ' ' | tr -d '.' | cut -c 1,2`
+[ "$VLCVERSION" = "" ] && export VLCVERSION=9 #ex 0.9.8.
+
+# get info for help message
+VLCPATH="`which vlc 2>/dev/null`"
+[ "$VLCPATH" != "" ] && export VLCVERHELP="VLC $VLC_VER is installed at $VLCPATH" || export VLCVERHELP="VLC is not installed"
+#090213 exit right away if VLC not installed.. duh..
+[ "$VLCPATH" = "" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "VLC is not installed. $APPNAME requires VLC to work." 0 0 && exit 1
+
+#121012 fixes for xdotool, make it optional, no searching, or errors if not found
+[ "`which xdotool`" != "" ] && export vlcgtkwid="`xdotool search --name "$APPNAME" &>/dev/null`" &>/dev/null # create the xdotool window id for vlc-gtk, enables restore after playback #061012 fixed
+
+#BK default video output needs to be adjusted...
+if [ -e ${HOME}/.config/vlc/vlcrc ];then
+	touch ${HOME}/.config/vlc/vlcrc
+	DEFVIDOUT='xv'
+	[ "`readlink $(which X 2>/dev/null)`" = "Xvesa" ] && DEFVIDOUT="x11" # 2.3.3
+	[ -f /etc/X11/xorg.conf ] && [ "`grep 'card0driver' /etc/X11/xorg.conf | grep '"vesa"'`" != "" ] && DEFVIDOUT="x11"
+	sed -i -e '/^vout=/d' ${HOME}/.config/vlc/vlcrc
+	if [ $VLCVERSION -ge 11 ];then #ex: 1.1.5
+	 echo "vout=xcb_${DEFVIDOUT}" >> ${HOME}/.config/vlc/vlcrc
+	else
+	 echo "vout=${DEFVIDOUT}" >> ${HOME}/.config/vlc/vlcrc
+	fi
+fi
+## CONFIG
+}
+
+{ #check if config exists
+if [ ! -f "$CONFIG" ]; then #no config - set default values
+	# gui options
+	FILE="Choose a file"
+	DIR="Choose a dir"
+	PLAYLIST_DIR="Choose a dir"
+	STREAM_URL="http://"
+	SAVE_STREAM=false
+	FAVE_STREAM=""
+	# general options
+	SHUFFLE=false
+	LOOP=false
+	PLAY_STOP="false"
+	# video options
+	FULL=false
+	OVERLAY=true
+	CROP="None"
+	ASPECT="Default"
+	VOUT="Default"
+	ON_TOP=true
+	# subtitle options
+	AUTO_SUBS=true
+	NO_AUTO_SUBS=false
+	SUBS="Choose a subtitles file [optional]"
+	SUBS_DELAY="0"
+	# audio options
+	AUDIO=true
+	DOLBY="Auto"
+	VOL="3"
+	# osd options
+	OSD=true
+	OSD_FONT="Choose .ttf font file [optional]"
+	OSD_FONT_SIZE="Default"
+	OSD_POS="Top-Right"
+	OSD_FX="Default"
+	OSD_TIMEOUT=5
+	# network #240912
+	SOPCAST_PORT=8902 #231212
+	HTTP_CACHING=3000
+	MMS_CACHING=3000
+	IPV46=ipv4
+	YOUTUBE=360p
+	# vlc-gtk-osc options
+	OSC=file #060912
+	DISABLE_OSC=false
+	LOGFILE=/tmp/vlc-gtk_log_$(whoami) #020912
+	DEBUG=false #020912
+	FF_FAST=false #020912
+	FF_DR=true #240912
+	SUBPIC=false #240912
+	EQUALIZER="flat" #020912
+	CLI_OPT="" #020912
+	#041012 added capture settings
+	CAP_TYPE_FILE=true
+	CAP_TYPE_DIR=false
+	CAP_TYPE_DVD=false
+	CAP_TYPE_SCREEN=false
+	CAP_TYPE_V4L=false
+	CAP_VCODEC=FLV1
+	CAP_ACODEC=SAME
+	CAP_SCALE=0.75
+	CAP_BITRATE=512
+	#061012 more capture options
+	CAP_ABITRATE=512
+	CAP_ACHANNELS=2
+	CAP_SAMPLERATE=44100
+	CAP_DEINT=true
+	CAP_FPS=12
+	CAP_SCREEN_CACHE=3000
+	CAP_SCREEN_FOLLOWMOUSE=false
+	CAP_OUTPUT="filename"
+	CAP_ADV=""
+	CAP_FORMAT="Default" #171012
+	CAP_DURATION=""
+	#231212 WORKDIR added here, gets a default if no config file, esle, get value from config file
+	WORKDIR="${HOME}"
+	SAVEDIR="${HOME}" #270213 separate dir for saving stuff, workdir is current dir/dir of last played item
+else
+	. $CONFIG #read config file
+	#270213 export dirs, stops them being blanked
+	export WORKDIR
+	export SAVEDIR
+fi
+}
+
+## COMMAND LINE
+
+#240912 fixes in immediate playback of $1
+if [ -f "$1" ]; then FILE="$1"; PLAYFILE=true; PLAYDIR=false; PLAYSTREAM=false; fi #230912 #230213 #240213
+if [ -d "$1" ];then DIR="$1"; PLAYDIR=true; PLAYFILE=false; PLAYSTREAM=false; fi #120429 #230912 #230213 #240213
+case "`echo $1`" in #230912 if playing a stream, disable PLAYFILE and PLAYDIR, use case statement
+	#250912 added support of streams starting www., ending .m3u .pls .aspx .wmv #231212 added asf and sop urls to list below
+	rtmpdump*|rtsp://*|rtp://*|rtmp://*|mms://*|https://*|http://*|www.*|*://*.m3u|*://*.pls|*://*.asx|*://*.asf|*://*.wmv|sop://*) . $CONFIG; STREAM_URL="$1"; PLAYSTREAM=true; PLAYDIR=false; PLAYFILE=false; ;; #230213 fixes in stream detection, update playlist #240213
+esac
+
+{ # overwrite config file here, with any command line options given
+while [ $# != 0 ]; do # get all options ($# means all options)
+   I=1
+   while [ $I -le `echo $# | wc -c` ]; do
+      case $1 in
+# files
+         --open|-o) FILE="$2";;
+		 --dir|-d) PLAYDIR=true; DIR="$2";;
+         --url|-u) STREAM_URL="$2";;
+         --fave) SAVE_STREAM="true";;
+         --play) PLAYNOW="true";; # vlc-gtk-osc takes this, and wont return to main menu if its true
+# subs
+         --subs) SUBS="$2"; AUTO_SUBS=false; NO_AUTO_SUBS=true;;
+		 --subs-delay) SUBS_DELAY="$2";;
+# playback
+         --random|-r) SHUFFLE="true";;
+         --loop) LOOP="true";;
+		 --play-stop) PLAY_STOP="true";;
+# video
+		 --on-top) ON_TOP="true";;
+		 --fullscreen|-fs) FULL="true";;
+		 --no-overlay) OVERLAY="false";;
+		 --aspect) ASPECT="$2";;
+		 --crop) CROP="$2";;
+		 --vout) VOUT="$2";;
+		 --window) FULL="false";;
+		 --ffmpeg-fast) FF_FAST="true";; #020912
+# osd
+		 --no-osd) OSD="false";;
+		 --osd-size) OSD_FONT_SIZE="$2";;
+# audio
+		 --audio) AUDIO="true";;
+		 --vol) VOL="$2";;
+		 --dolby) DOLBY="$2";;
+		 --equalizer) EQUALIZER="$2";; #020912
+		 --mute) AUDIO="false";;
+# other
+         --tab) TAB="$2";;
+         --debug) DEBUG="true";;
+         --logfile) LOGFILE="$2";; #020912
+		 --version|-v)echo "$APPNAME version $APPVER"; exit;;
+         --help|-h) clear
+echo '
+  '$APPNAME' '$APPVER': a lightweight VLC GUI frontend
+  '$VLCVERHELP'
+
+  Usage: '$SELF' [OPTION(S)]
+
+  NOTE: The 1st option given must be a file, dir or URL for playback to start immediately.
+  You can force immediate playback with the --play option.
+
+  Options:
+
+  [FILE/URL]			Start immediate playback of FILE or URL, if no other options.
+  -o|--open "file"		Set a file to play
+  --play 			Start playback immediately
+  -d|--dir "dir"		Set a directory to play
+  -u|--url "url"		Choose the URL/stream to play
+  --fave 			Save stream to favourites
+  --subs "file"			Choose the subtitles file to load
+  --subs-delay <integer>	The number of seconds to delay
+  -r|--random			Shuffle files during playback
+  --loop			Loop through all files repeatedly
+  --play-stop			Stop playback after each file completes
+  --audio			Enable audio playback
+  --vol <integer>		Set the volume level (0...1024)
+  --dolby <string>		Enable dolby surround (Auto, On, Off)
+  --equalizer <string>		Equalizer preset (classical,club,dance,fullbass,fullbasstreble,fulltreble,headphones,largehall,live,party,pop,reggae,rock,ska,soft,techno)
+  --mute			Disable audio playback
+  -fs|--fullscreen	   	Load the video file in fullscreen
+  --no-overlay			Disable overlay video output
+  --on-top			Show the video window above all other apps
+  --crop <string>		Crop video image (16:10, 16:9, 1:1, 221:100, 4:3, 5:4)
+  --aspect <string>		Set the video aspect ratio (16:10, 16:9, 1:1, 221:100, 4:3, 5:4)
+  --vout			Video output (XVideo,X11,SDL,GLX,SVGAlib)
+  --window	   		Load the video file in window
+  --ffmpeg-fast	   		Use ffmpeg speed up hacks for faster playback (may cause errors)
+  --no-osd			Disable the on screen display
+  --osd-size <string>		OSD font size (Default, Smaller, Small, Large, Larger)
+  --tab				Choose the tab to show at startup (0,1,2,3)
+  --debug			View all commands sent to vlc in a popup window
+  --logfile "file"		The file to which VLC write its messages, errors, warnings, etc.
+  -v|--version			Show the version number of this app
+  -h|--help			Show this help message
+
+  Examples:
+
+  '$SELF' "/path/to/film.avi"
+  '$SELF' --open "/film.avi" --subs "/subs.srt" --fullscreen --play
+  '$SELF' -fs -d "${HOME}/tv-series/" -r
+
+  Requirements: '$GTKDIALOG', xdialog, VLC 0.8.6 or higher'; exit;;
+      esac
+      shift
+      I=$[$I+1]
+   done
+done
+}
+
+set -a #export all functions
+
+show_stream_info () { #100913 added stream info and corresponding button in stream tab #130913 use <edit>
+	STREAM_INFO="`cat "$FAVES" | grep "$FAVE_STREAM_URL"  | tr "|" "\n"`"
+	export STREAM_INFO_GUI="<window icon-name=\"vlc\" title=\"$APPNAME $APPVER\"><vbox>
+<edit>
+	<width>400</width><height>100</height>
+	<default>\"${STREAM_INFO}\"</default>
+</edit>
+<button cancel></button>
+</vbox></window>"
+	$GTKDIALOG -c -p STREAM_INFO_GUI &
+}
+
+get_sopcasts () { #231212 get latest sopcasts channels, add them to $FAVES
+	[ "`which $SOPCASTBIN 2>/dev/null`" = "" ] && echo "error" && return 1
+	Xdialog --title "$APPNAME $APPVER" --msgbox " Please wait.. The latest SopCast streams will be added to your favourites." 0 0 &
+	XPID=$!
+	TMPDIR="/tmp/sopcasts${RANDOM}_$(whoami)"
+	mkdir -p "$TMPDIR"
+	cd "$TMPDIR"
+	wget http://www.sopcast.com/gchlxml &>/dev/null
+	if [ -f gchlxml ];then
+		sed -i "s/></>\n</g" gchlxml
+		cat gchlxml | while read LINE; do
+			[ "$(echo "$LINE" | grep '<name en')" != "" ] && echo "$LINE" >> list.txt
+			[ "$(echo "$LINE" | grep 'item>sop://')" != "" ] && echo "$LINE" >> list.txt
+		done
+		N=0
+		cat list.txt | while read LINE; do
+			N=`expr $N + 1`
+			[ "$(echo "$LINE" | grep '<name')" != "" ] && NAME="$(echo "$LINE" | cut -f2 -d'"')" #'
+			[ "$(echo "$LINE" | grep '<item>sop://')" != "" ] && URL="$(echo "$LINE" | cut -f2 -d'>' | cut -f1 -d'<')"
+			[ "$NAME" != "" -a "$URL" != "" ] && echo "SopCast: $NAME-$N|$URL" >> channels1.txt
+		done
+	fi
+	sort channels1.txt | uniq > channels.txt
+	VAR="$(cat channels.txt)"
+	rm * &>/dev/null
+	rm -R "$TMPDIR"
+	kill $XPID
+	echo "$VAR"
+}
+
+set_savedir () {
+	GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+	RETVAL=`$GTKDIALOG -c -s <<< '<window title="'"$APPNAME $APPVER"'" width-request="550">
+	<frame>
+	<text><label>Choose a directory that '$APPNAME' can save to</label></text>
+	<chooser height-request="400">
+		<default>"'"$SAVEDIR"'"</default>
+		<variable>SAVEDIR</variable>
+	</chooser>
+	<hbox>
+		<button ok>
+			<action type="exit">EXIT_NOW</action>
+		</button>
+		<button cancel>
+			<action type="exit">CANCEL</action>
+		</button>
+	</hbox>
+	</frame>
+	</window>'`
+	eval "$RETVAL"
+	if [ "$EXIT" != "CANCEL" ];then
+		[ -f "$SAVEDIR" ] && SAVEDIR="`dirname "$SAVEDIR"`"
+		if [ -d "$SAVEDIR" ];then
+			export SAVEDIR
+			#cd "$WORKDIR"
+			write_config
+			. "$CONFIG" #230213 reload rcfile
+		fi
+	fi
+	$SELF &
+	exit 0
+}
+
+get_vlc_pids () { #151012
+	sleep 0.1 #130913
+	sed '/^$/d' ${VLCPIDFILE} > ${VLCPIDFILE}.out && mv ${VLCPIDFILE}.out ${VLCPIDFILE} 2>/dev/null # remove all blank lines
+	#161012 export below
+	export RUNVLC_PIDS="`cat ${VLCPIDFILE}`" # get all PIDs
+	export RUNVLC_PID="$(echo "$RUNVLC_PIDS"  | tail -1)" # get most recent PID
+}
+
+kill_vlc () { #kill VLC and related processes
+	#151012 updated, run_vlc builds a list of VLC pids, kill_vlc will kill the PID on 1st line then remove it from the list
+	get_vlc_pids
+	if [ "$RUNVLC_PIDS" != "" ];then #if PIDs found
+		RUNVLC_PID="$(echo "$RUNVLC_PIDS"  | tail -1)" # get most recent PID
+		if [ "$RUNVLC_PID" != "" ];then # if single PID found
+			kill $RUNVLC_PID &>/dev/null # kill the PID
+			#161012 recursive, if no PID to kill/killed, remove it from the list, kill the next one
+			[ $? -eq 1 ] && {
+				[ "$RUNVLC_PID" != "" ] && echo "$(echo "$RUNVLC_PIDS"|grep -v "$RUNVLC_PID" 2>/dev/null)" > ${VLCPIDFILE} #171012 if found, remove the dead PID from the list
+				sed '/^$/d' ${VLCPIDFILE} > ${VLCPIDFILE}.out && mv ${VLCPIDFILE}.out ${VLCPIDFILE} # remove all blank lines
+				kill_vlc
+			}
+			echo "$(echo "$RUNVLC_PIDS"|grep -v "$RUNVLC_PID" 2>/dev/null)" > ${VLCPIDFILE} #remove the killed PID from the list #230213 quiet output
+			sed '/^$/d' ${VLCPIDFILE} > ${VLCPIDFILE}.out && mv ${VLCPIDFILE}.out ${VLCPIDFILE} # remove all blank lines
+		fi
+	fi
+	killall -9 xdotool &>/dev/null
+	killall -9 resize_playback &>/dev/null #050912
+	[ -e "$SOPPIDFILE" ] && kill -9 `cat "$SOPPIDFILE" 2>/dev/null | head -1` &>/dev/null #231212 sopcast support, kills last run process, any previous processes will not be killled!
+	#151012 dont killall
+	#killall -9 vlc-gtk-osc &>/dev/null
+	#killall -9 cvlc &>/dev/null
+	#killall -9 vlc &>/dev/null
+	#killall -9 vlc_nogui &>/dev/null
+	#killall -9 rtmpdump &>/dev/null #020812
+}
+
+get_dvd () { # get the DVD device  #270913
+	DVD_DEV="sr0"
+	if [ -f /etc/dvddevice ];then
+		export DVD_DEV="$(cat /etc/dvddevice | head -1)"
+	fi
+	#echo "The DVD device being used is /dev/$DVD_DEV"
+	echo $DVD_DEV  #270913
+}
+
+get_cd () { # get the CD device  #270913
+	CD_DEV="sr0"
+	if [ -f "/etc/cdromdevice" ];then
+		export CD_DEV="$(cat /etc/cdromdevice | head -1)"
+	fi
+	#echo "The CD device being used is /dev/$CD_DEV"
+	echo $CD_DEV  #270913
+}
+
+write_config () {
+	#write all variable values to config file
+	echo '#'$APPNAME' config file' > $CONFIG
+	# gui options
+	echo '#gui options' >> $CONFIG
+	echo FILE="\"$FILE\""	 >> $CONFIG
+	echo DIR="\"$DIR\""	 >> $CONFIG
+	echo PLAYLIST_DIR="\"$PLAYLIST_DIR\""	 >> $CONFIG
+	echo STREAM_URL="\"$STREAM_URL\"" >> $CONFIG
+	echo SAVE_STREAM=$SAVE_STREAM >> $CONFIG
+	echo FAVE_STREAM="\"$FAVE_STREAM\"" >> $CONFIG #040812 remember last chosen stream
+	# general options
+	echo '#general options' >> $CONFIG
+	echo SHUFFLE=$SHUFFLE >> $CONFIG
+	echo LOOP=$LOOP >> $CONFIG
+	echo PLAY_STOP=$PLAY_STOP >> $CONFIG
+	# video options
+	echo '#video options' >> $CONFIG
+	echo FULL=$FULL >> $CONFIG
+	echo CROP=$CROP >> $CONFIG
+	echo ASPECT=$ASPECT >> $CONFIG
+	echo VOUT=$VOUT >> $CONFIG
+	echo OVERLAY=$OVERLAY >> $CONFIG
+	echo ON_TOP=$ON_TOP >> $CONFIG
+	# subtitle settings
+	echo '#subtitle options' >> $CONFIG
+	echo NO_AUTO_SUBS=$NO_AUTO_SUBS >> $CONFIG
+	echo AUTO_SUBS=$AUTO_SUBS >> $CONFIG
+	echo SUBS="\"$SUBS\"" >> $CONFIG
+	echo SUBS_DELAY=$SUBS_DELAY >> $CONFIG
+	# audio settings
+	echo '#audio options' >> $CONFIG
+	echo AUDIO=$AUDIO >> $CONFIG
+	echo DOLBY=$DOLBY >> $CONFIG
+	echo EQUALIZER="\"$EQUALIZER\"" >> $CONFIG #020912
+	echo VOL=$VOL >> $CONFIG
+	# osd settings
+	echo '#OSD options' >> $CONFIG
+	echo OSD=$OSD >> $CONFIG
+	echo OSD_FONT="\"$OSD_FONT\"" >> $CONFIG
+	echo OSD_FONT_SIZE=$OSD_FONT_SIZE >> $CONFIG
+	echo OSD_POS=$OSD_POS >> $CONFIG
+	echo OSD_FX=$OSD_FX >> $CONFIG
+	echo OSD_TIMEOUT=$OSD_TIMEOUT >> $CONFIG
+	# network #240912
+	echo '#network options' >> $CONFIG
+	echo SOPCAST_PORT=$SOPCAST_PORT >> $CONFIG #231212
+	echo HTTP_CACHING=$HTTP_CACHING >> $CONFIG
+	echo MMS_CACHING=$MMS_CACHING >> $CONFIG
+	echo IPV46=$IPV46 >> $CONFIG
+	echo YOUTUBE=$YOUTUBE >> $CONFIG
+	# vlc-gtk-osc options
+	echo '#'$APPNAME' OSC options' >> $CONFIG
+	echo OSC=$OSC >> $CONFIG #060912
+	echo DISABLE_OSC=$DISABLE_OSC >> $CONFIG
+	# advanced
+	echo '#advanced options' >> $CONFIG
+	echo FF_FAST=$FF_FAST >> $CONFIG #020912
+	echo FF_DR=$FF_DR >> $CONFIG #240912
+	echo SUBPIC=$SUBPIC >> $CONFIG #240912
+	echo LOGFILE="\"$LOGFILE\"" >> $CONFIG #020912
+	echo DEBUG=$DEBUG >> $CONFIG #020912
+	echo CLI_OPT="\"$CLI_OPT\"" >> $CONFIG #020912
+	#041012 capture settings
+	echo '#capture (transcoder) options' >> $CONFIG
+	echo CAP_TYPE_FILE=$CAP_TYPE_FILE >> $CONFIG
+	echo CAP_TYPE_DIR=$CAP_TYPE_DIR >> $CONFIG
+	echo CAP_TYPE_DVD=$CAP_TYPE_DVD >> $CONFIG
+	echo CAP_TYPE_SCREEN=$CAP_TYPE_SCREEN >> $CONFIG
+	echo CAP_TYPE_V4L=$CAP_TYPE_V4L >> $CONFIG
+	echo CAP_VCODEC=$CAP_VCODEC >> $CONFIG
+	echo CAP_ACODEC=$CAP_ACODEC >> $CONFIG
+	echo CAP_SCALE=$CAP_SCALE >> $CONFIG
+	echo CAP_BITRATE=$CAP_BITRATE >> $CONFIG
+	#061012 more capture options
+	echo CAP_ABITRATE=$CAP_ABITRATE >> $CONFIG
+	echo CAP_ACHANNELS=$CAP_ACHANNELS >> $CONFIG
+	echo CAP_SAMPLERATE=$CAP_SAMPLERATE >> $CONFIG
+	echo CAP_DEINT=$CAP_DEINT >> $CONFIG
+	echo CAP_FPS=$CAP_FPS >> $CONFIG
+	echo CAP_SCREEN_CACHE=$CAP_SCREEN_CACHE >> $CONFIG
+	echo CAP_SCREEN_FOLLOWMOUSE=$CAP_SCREEN_FOLLOWMOUSE >> $CONFIG
+	echo CAP_OUTPUT="\"$CAP_OUTPUT\"" >> $CONFIG
+	echo CAP_ADV="\"$CAP_ADV\"" >> $CONFIG
+	echo CAP_FORMAT="\"$CAP_FORMAT\"" >> $CONFIG #171012
+	echo CAP_DURATION=$CAP_DURATION >> $CONFIG
+
+	#270213 always upates workdir here, each time a file/dir is played
+	#set work dir here - it'll get updated everytime the playback file or dir changes
+	if [ -f "$FILE" ];then
+		export WORKDIR="$(dirname "$FILE")"
+	else
+		[ -d "$DIR" ] && export WORKDIR="$DIR" #231212 added export
+	fi
+	[ ! -d "$WORKDIR" ] && export WORKDIR="${HOME}"
+	#070220124: make file->open easier #161012 use WORKDIR #250213 move it here
+	[ "$WORKDIR" = "." ] && export WORKDIR="`pwd`" #181012
+	#270213 fixed, only update dirs if valid
+	[ -d "$WORKDIR" -a "$WORKDIR" != "" ] && echo WORKDIR="\"${WORKDIR}\"" >> $CONFIG #231212 added WORKDIR to config file
+	[ -d "$SAVEDIR" -a "$SAVEDIR" != "" ] && echo SAVEDIR="\"${SAVEDIR}\"" >> $CONFIG #270213 added save dir
+}
+
+write_fave () {
+	#write all variable values to config file
+	if [ "$STREAM_URL" != "http://" ] && [ "$STREAM_URL" != "" ];then
+		#270712 improved stream, improved GUI restart
+		GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+		#280712 fixed, removing name from $STREAM_URL, keep only URL
+		FAVE_TITLE=$(Xdialog --stdout --title "$APPNAME ${APPVER}" --ok-label "Add Stream" --backtitle "Add stream to favourites:\n${STREAM_URL##*|}" --inputbox "Type a name you will remember." 12 85) #080812 fixed width #220912 fixed info msg
+		if [ $? -eq 0 ];then
+			[ "$FAVE_TITLE" = "" ] && FAVE_TITLE="Fave-Stream-$RANDOM"
+			echo "$FAVE_TITLE|${STREAM_URL##*|}" >> $FAVES #280712 fixed if name was included in $STREAM_URL
+			echo "Favourite '$STREAM_URL' added to $FAVES"
+			Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Stream added to favourites list" 5 30
+		fi
+		#$SELF --tab 2 & #080812 don't restart like this, use play_url func here
+		play_url
+		exit 0
+	fi
+}
+
+delete_fave () { #270712 improved radio station listings
+	#note FAVE_STREAM_URL is the stream name here
+	NEW_FAVES="$(cat "$FAVES" | grep -v "${FAVE_STREAM_URL}|")" #080812 fixed selection of stream to exclude (delete)
+	echo "$NEW_FAVES" > $FAVES
+	unset NEW_FAVES
+	GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+	#sed -i "\|.*$FAVE_STREAM_URL.*| d" $FAVES # remove the line matching the current fave in the list
+	Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Favourite deleted" 5 30
+	$SELF --tab 2 &
+	exit 0
+}
+
+write_playlist () {
+	# create the file
+	rm "$PLAYLIST_DIR/$PLAYLIST"
+	if [ "$AUDIOPL" = false ];then
+		# add all video files #170913 updated, faster
+		find "$DIR" -maxdepth 1 -iname "*.264" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.3gp" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.3gp2" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.arf" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.asf" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.asx" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.avi" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.dat" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.divx" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.dv" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.dv-avi" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.f4v" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.flv" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.gvi" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.h264" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.m21" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.m2p" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.m2v" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mkv" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mov" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mp4" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mpg" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mpeg" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mpv" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.rm" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.rmvb" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.vob" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.wmv" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.xvid" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		echo "video playlist created"
+	fi
+	if [ "$VIDEOPL" = false ];then
+		# add all audio files
+		find "$DIR" -maxdepth 1 -iname "*.au" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.amr" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.gsm" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.m4b" -print >> "$PLAYLIST_DIR/$PLAYLIST" #250213
+		find "$DIR" -maxdepth 1 -iname "*.m4p" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mp3" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mpc" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.ogg" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.m4a" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.flac" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.mp2" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.ra" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.rm" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.tta" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.wav" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		find "$DIR" -maxdepth 1 -iname "*.wma" -print >> "$PLAYLIST_DIR/$PLAYLIST"
+		echo "audio playlist created"
+	fi
+}
+
+save_playlist () {
+	# if the dir being used to make a playlist exists
+	if [ -d "$PLAYLIST_DIR" ];then
+		if [ -d "$DIR" ];then
+			# write files to the playlist (found at $PLAYLIST_DIR/$PLAYLIST)
+			write_playlist
+			# if the playlist file created above exists
+			if [ -f "$PLAYLIST_DIR/$PLAYLIST" ];then
+				# count files added to playlist
+				PL_TOTAL=`grep -cve '^\s*$' "$PLAYLIST_DIR/$PLAYLIST"`
+				# if total is more than zero
+				if [ $PL_TOTAL -gt 0 ];then
+					# ask user to play immediately or not
+					Xdialog --title "$APPNAME ${APPVER}" --center --yesno "Playlist created - $PL_TOTAL items added. Play now?" 5 55
+					# yes the answer (aka exit code)
+					EXIT_CODE=$?
+					# if the answer was yes (yes=0)
+					if [ "$EXIT_CODE" = "0" ];then
+						export OSC=file #060912
+						# kill vlc, save settings, then reload vlc with new playlist
+						run_vlc playlist #300912
+						echo "`cat "$PLAYLIST_DIR/$PLAYLIST" | sort`" > /tmp/vlc-gtk-playlist_$(whoami).m3u #230213 add to playlist .. its a list of files #100913 sort the playlist
+						sleep 1
+						OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=1 vlc-gtk-osc $FULL $PLAYNOW & #120428 #040812 #290812
+						# reset exit code
+						EXIT_CODE="done"
+					fi
+				else # if playlist is empty, tell the user
+					Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Playlist is empty, not saved." 5 35
+					rm "$PLAYLIST_DIR/$PLAYLIST"
+				fi
+			else # if playlist file does not exist
+				Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Playlist file not found" 5 30
+			fi
+		else # a directory does not exist
+			Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Playback directory not found" 5 35
+		fi
+	else # playlist cant be saved, dir $PLAYLIST_DIR does not exist
+		Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Playlist directory not found" 5 35
+	fi
+}
+
+play_file () { # this function is executed when the user click the 'Play file' button, or gives a file as only param #230213 support playlist gui
+	if [ -e "$FILE" ];then  # if the file exists
+		 #230213 add to playlist if its a list of files, or loaded from main gui
+		if [ "$UPDATE_PLAYLIST" = true ];then
+			[ "${FILE##*.}" = "m3u" ] && echo "`cat "$FILE" | grep -v "^#"`" > /tmp/vlc-gtk-playlist_$(whoami).m3u || echo "$FILE" > /tmp/vlc-gtk-playlist_$(whoami).m3u
+		fi
+		export OSC=file #060912
+		XPID=''
+		[ ! $GUITAB ] && GUITAB=0 #050812
+		run_vlc file #030912
+		sleep 0.5
+		OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=$GUITAB vlc-gtk-osc $FULL $PLAYNOW & #120428 #040812 #290812
+	 else # if file does not exist
+		Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Nothing to play" 5 30
+	fi
+}
+
+play_dvd () {
+	DVD_DEV=$(get_dvd)  #270913
+	DISC_CHECK="`cddetect_quick -d/dev/${DVD_DEV}`" #070220121
+	if [ "$DISC_CHECK" != "no disc" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 dont use the playlist for one item
+		export OSC=file #060912
+		XPID=''
+		Xdialog --title "$APPNAME" --no-buttons --infobox "Loading DVD... Please wait..." 0 0 3000 & #1204281
+		XPID=$!
+		run_vlc dvd #030912
+		sleep 1.5
+		OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=0 vlc-gtk-osc $FULL $PLAYNOW & # attach buttons #120428 #040812 #290812
+		kill $XPID #1204281
+		XPID=''
+	fi
+}
+
+play_dvdsimple () { #121012 added to main gui, simple playback of dvd (without menus, etc)
+	DVD_DEV=$(get_dvd)  #270913
+	DISC_CHECK="`cddetect_quick -d/dev/${DVD_DEV}`" #070220121
+	if [ "$DISC_CHECK" = "disc inserted" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 dont use the playlist for one item
+		export OSC=file #060912
+		XPID=''
+		Xdialog --title "$APPNAME" --no-buttons --infobox "Loading DVD... Please wait, menus will be skipped..." 0 0 3000 & #1204281
+		XPID=$!
+		run_vlc dvdsimple #030912
+		sleep 1.5
+		OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=0 vlc-gtk-osc $FULL $PLAYNOW & # attach buttons #120428 #040812 #290812
+		kill $XPID #1204281
+		XPID=''
+	fi
+}
+
+play_vcd () {
+	CD_DEV=$(get_cd)  #270913
+	DISC_CHECK="`cddetect_quick -d/dev/${CD_DEV}`" #070220121
+	if [ "$DISC_CHECK" = "disc inserted" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 dont use the playlist for one item
+		export OSC=file #060912
+		XPID=''
+		Xdialog --title "$APPNAME" --no-buttons --infobox "Loading VCD... Please wait..." 0 0 3000 & #1204281
+		XPID=$!
+		run_vlc vcd #030912
+		sleep 1
+		OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=0 vlc-gtk-osc $FULL $PLAYNOW & #120428 #040812 #290812
+		kill $XPID #1204281
+		XPID=''
+	fi
+}
+
+play_audiocd () {
+	CD_DEV=$(get_cd)  #270913
+	DISC_CHECK="`cddetect_quick -d/dev/${CD_DEV}`" #070220121
+	if [ "$DISC_CHECK" = "disc inserted" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 dont use the playlist for one item
+		if [ -e /usr/local/bin/pmusic_CD ];then #03022012
+			pmusic_CD &
+		else
+			XPID=''
+			run_vlc audiocd #030912
+		fi
+	fi
+}
+
+play_dir () { #230213 support playlist gui
+	if [ -d "$DIR" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && echo "`find "$DIR"/ | sort`" > /tmp/vlc-gtk-playlist_$(whoami).m3u #230213 add to playlist #020313 use find, ls wont work with mulitple dirs
+		export OSC=file #060912
+		XPID=''
+		run_vlc dir #030912
+		sleep 1
+		OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=1 vlc-gtk-osc $FULL $PLAYNOW &  #120428 #040812 #290812
+	else # dir does not exist
+		Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Nothing to play" 5 30
+	fi
+}
+
+play_url () {
+	if [ "$STREAM_URL" != "http://" ] || [ "$STREAM_URL" != "mms://" ] || [ "$STREAM_URL" != "rtp://" ] || [ "$STREAM_URL" != "rtsp://" ];then
+		#230213 m3u/pls/etc can be local files or streams .. so ...
+		# if its a local m3u file list its contents in the playlist #240213 dont remove existing playlist if not making one here
+		[ -f "${STREAM_URL}" -a "${STREAM_URL##*.}" = "m3u" ] && echo "`cat "$FILE"`" > /tmp/vlc-gtk-playlist_$(whoami).m3u # || rm /tmp/vlc-gtk-playlist_$(whoami).m3u
+		export OSC=stream #060912
+		XPID=''
+		if [ "$(echo $STREAM_URL | grep ^rtmpdump)" != "" ];then #040812 play rtmpdump commands #220912 fix
+			while read LINE; do
+				case $LINE in
+					*${STREAM_URL}*) NAME="${LINE%%|*}" # get name
+				esac
+			done<"$FAVES"
+			run_vlc streamrtmp #030912 pipe rtmpdump output to vlc
+		elif [ "$(echo $STREAM_URL | grep ^'http://www.youtube.')" != "" ];then #220912 add support for youtube URLs
+			run_vlc youtube
+		elif [ "$(echo $STREAM_URL | grep ^www.youtube.)" != "" ];then #250912 support urls without http://
+			STREAM_URL="http://${STREAM_URL}"
+			run_vlc youtube
+		elif [ "$(echo $STREAM_URL | grep ^'sop://')" != "" ];then #231212 added support for Sopcast URLs
+			if [ "`which $SOPCASTBIN 2>/dev/null`" != "" ];then
+				run_vlc sopcast
+			else
+				Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Sopcast program '$SOPCASTBIN' not installed."  5 30 #020313 fixed msg
+			fi
+		else
+			run_vlc streamurl #030912 play url with vlc as normal
+		fi
+		sleep 3
+		#040213 added STREAM_URL2=*, so OSC can add it to top of the list, and thus run record_fave on it
+		STREAM_URL2="$STREAM_URL" OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=2 vlc-gtk-osc $FULL $PLAYNOW &  #120428 #040812 #290812
+	else
+		Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Please choose a URL" 5 30
+	fi
+}
+
+play_fave () {
+	if [ "$FAVE_STREAM_URL" != "" ];then
+		[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 dont use the playlist for one item
+		export OSC=stream #060912
+		XPID=''
+		#270712 improved radio/stream listings
+		while read LINE; do
+			case $LINE in
+				"${FAVE_STREAM_URL}|"*) FAVE_STREAM_URL="${LINE##*|}"; NAME="${LINE%%|*}" # get name and URL #040812 fix case selection
+			esac
+		done<"$FAVES"
+		export FAVE_STREAM="${NAME}" #040812 remember last chosen favourite stream
+		if [ "$(echo $FAVE_STREAM_URL | grep ^rtmpdump)" ];then #310712 check for rtmpdump cmd, pipe to vlc if found
+			if [ "`which rtmpdump`" != "" ];then
+				#030812 execute `rtmpdump [blah] | vlc -` #020812 output to /dev/null #020912 fixes for $CL (for debugging)
+				#030912 updates again .. reworked, includes run_vlc
+				[ "$DEBUG" = false ] && run_vlc streamrtmpfave || TYPE=streamrtmpfave debugger "$FAVE_STREAM_URL | cvlc $C $CACHE_OPT --meta-title '$NAME' -"
+			else
+				Xdialog --title "$APPNAME $APPVER" --msgbox "You need to install rtmpdump to play:\n${FAVE_STREAM_URL}" 0 0
+			fi
+		elif [ "$(echo "$FAVE_STREAM_URL" | grep ^http://www.youtube.)" != "" ];then #220912 add support for youtube
+			run_vlc youtubefave
+		elif [ "$(echo "$FAVE_STREAM_URL" | grep ^'sop://')" != "" ];then #231212 added support for Sopcast URLs
+			[ "`which $SOPCASTBIN 2>/dev/null`" != "" ] && run_vlc sopcastfave || Xdialog --title "$APPNAME ${APPVER}" --center --msgbox "Sopcast program '$SOPCASTBIN' not installed."  5 30 #020313 fixed msg
+		else
+			run_vlc streamurlfave #030912
+		fi
+		sleep 2
+		#040213 added STREAM_URL2='', OSC adds STREAM_URL fave streams list, if not empty, to enable record of non fave streams in OSC
+		[ "$RESETOSC" = true ] && STREAM_URL2='' OSC=$OSC DISABLE_OSC=$DISABLE_OSC GUITAB=2 vlc-gtk-osc $FULL $PLAYNOW & #120428 return to last showing tab #290812
+	fi
+}
+
+record_fave () { #050812 record streams to file
+	# note FAVE_STREAM_URL is prob gonna be a rtmpdump cmd here
+	if [ "$FAVE_STREAM_URL" != "" ];then
+		rm "${STREAMDWNLDFILE}" &>/dev/null #120812 remove it, cos non rtumpdump streams need a fresh one #151012
+		XPID=''
+		#kill_vlc #060812 don't need to kill anything, download is separate process, doesn't interfere with playback (if any)
+		FOUND_STREAM=false #allow urls not in $FAVES to be recognised
+		STREAM_FILE="${SAVEDIR}/stream_download.flv" #use work dir #161012
+		while read LINE; do
+			case $LINE in
+				"${FAVE_STREAM_URL}|"*)
+					FOUND_STREAM=true
+					FAVE_STREAM_URL="${LINE##*|}"
+					STREAM_FILE="${SAVEDIR}/${LINE%%|*}_$(date +%d%m%y_%H%M%S).flv"
+					STREAM_FILE="${STREAM_FILE// /_}"
+					FAVE_STREAM="${LINE%%|*}"
+				;;
+			esac
+		done<"$FAVES"
+		if [ "$(echo $FAVE_STREAM_URL | grep ^rtmpdump)" != "" ];then
+			if [ "`which rtmpdump`" != "" ];then
+				run_vlc streamdownloadrtmp #030912
+				XPID=$!
+			else
+				Xdialog --title "$APPNAME $APPVER" --msgbox "You need to install rtmpdump to record:\n${FAVE_STREAM_URL}" 0 0
+			fi
+		else # not rtmpdump
+		 	#120812 lets try to save the stream to a file, using vlc only, comment out below...
+			#Xdialog --title "$APPNAME $APPVER" --msgbox "This stream cannot be recorded:\n${FAVE_STREAM_URL}" 0 0
+		 	# vlc doesnt like spaces, {} or : in filenames with the --sout option
+		 	STREAM_FILE="${STREAM_FILE// /_}"
+		 	STREAM_FILE="${STREAM_FILE//:/}"
+		 	STREAM_FILE="${STREAM_FILE//\/\//}" # remove //
+			#220912 enable youtube download
+			if [ "$(echo $FAVE_STREAM_URL | grep ^http://www.youtube.)" != "" ];then
+				FAVE_STREAM_URL="${FAVE_STREAM_URL%%&*}" #strip options
+				[ "$FOUND_STREAM" = false ] && STREAM_FILE="${SAVEDIR}/youtube_${FAVE_STREAM_URL#*=}_$YOUTUBE.flv" #161012
+				FAVE_STREAM_URL="${FAVE_STREAM_URL}&fmt=34" # force 360p flv
+				#230912 ask user to accept or change filename here
+				STREAM_FILE="$(Xdialog --stdout --no-cancel --ok-label 'Save Stream' --title "$APPNAME $APPVER" --inputbox 'Choose a filename for your stream. NOTE: The filename \n should not contain spaces, or these characters: / \ { } ( ) & = : ; ' 0 30 $STREAM_FILE)"
+			elif [ "$(echo $FAVE_STREAM_URL | grep ^'sop://')" != "" ];then #231212 sopcast
+				if [ "`which $SOPCASTBIN 2>/dev/null`" != "" ];then
+					STREAM_FILE="${STREAM_FILE//.flv/.asf}"
+					#[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 remove playlist for one item #240213 ignore playlists
+					run_vlc sopcastfavedownload
+					XPID=$!
+					DWNLD_PID=$XPID
+				fi
+			elif [ "`echo $FAVE_STREAM_URL | grep ".asx\$"`" != "" ];then # try to catch audio streams
+				STREAM_FILE="${STREAM_FILE//.flv/.mp3}" #use avi to output non rtmpdump and youtube streams
+				CAP_TYPE_DVD=false CAP_TYPE_SCREEN=false CAP_TYPE_FILE=false CAP_TYPE_DIR=false CAP_TYPE_URL=true capture $FAVE_STREAM_URL &
+				DWNLD_PID=$!
+				exit 0
+
+			elif [ "`echo $FAVE_STREAM_URL | grep -i "mp3"`" != "" ];then # try to catch audio streams
+				STREAM_FILE="${STREAM_FILE//.flv/.mp3}" #use avi to output non rtmpdump and youtube streams
+				STREAM_URL="$FAVE_STREAM_URL" CAP_TYPE_DVD=false CAP_TYPE_SCREEN=false CAP_TYPE_FILE=false CAP_TYPE_DIR=false CAP_TYPE_URL=true capture $FAVE_STREAM_URL &
+				DWNLD_PID=$!
+				exit 0
+			else
+				STREAM_FILE="${STREAM_FILE//.flv/.avi}" #use avi to output non rtmpdump and youtube streams
+			fi
+
+			if [ "$(echo $FAVE_STREAM_URL | grep ^'sop://')" = "" ];then #231212 support for sopcasts
+				#[ "$UPDATE_PLAYLIST" = true ] && rm /tmp/vlc-gtk-playlist_$(whoami).m3u &>/dev/null #230213 remove playlist for one item #240213 ignore playlists
+				run_vlc streamdownload #030912
+				DWNLD_PID=$!
+			fi
+			# use a func as a background process to update file used in xdialog tailbox, with latest filesize of $STREAM_FILE
+			write_stream_size () { #081012 updates
+				echo "Please wait.." > "${STREAMDWNLDFILE}"  #151012
+				SAME_SIZE=0
+				while [ "$(ps | grep $DWNLD_PID | grep -v grep)" != "" -a "$(ps | grep $RUNVLC_PID | grep -v grep)" != "" ];do
+					if [ -s "$STREAM_FILE" ];then
+						PREV_STREAM_SIZE="$STREAM_SIZE"
+						#240912 show kb
+						STREAM_SIZE=$(du -k "$STREAM_FILE")
+						[ "$PREV_STREAM_SIZE" = "$STREAM_SIZE" ] && SAME_SIZE=$(expr $SAME_SIZE + 1) || SAME_SIZE=0
+						STREAM_SIZE=`echo $STREAM_SIZE  | cut -f1 -d' '`
+						echo "${STREAM_SIZE}Kb  [${SAME_SIZE}]  $STREAM_FILE" >> "${STREAMDWNLDFILE}"  #151012
+						[ "$SAME_SIZE" = 15 ] && break
+					else
+						continue
+					fi
+					sleep 1
+				done
+			}
+			write_stream_size &
+			DWNLDPRGRSS_PID=$!
+		fi
+		# show download progress in tailbox	#061012 clean up of debug handling
+		if [ "$DEBUG" = false ];then
+			GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+			Xdialog --backtitle "Downloading stream to file: ${STREAM_FILE}\n" --title "$APPNAME $APPVER" --ok-label "Stop Download" --no-cancel --tailbox "${STREAMDWNLDFILE}" 20 70 #151012
+			#060812 fixes in checking for and loading the downloaded file, REPLY and [ -s $STREAM_FILE ]
+			REPLY=$?
+			if [ $REPLY -eq 0 ];then
+				kill $RUNVLC_PID 2>/dev/null
+				kill $DWNLD_PID 2>/dev/null
+				kill $DWNLDPRGRSS_PID 2>/dev/null
+				kill -9 `cat $SOPPIDFILE 2>/dev/null| head -1`
+			fi #120812 kill write_stream_size too #231212 kill the sopcast too
+
+			#offer to playback... #060812 only if file was created, delete if blank
+			if [ -f "${STREAM_FILE}" ] && [ -s "${STREAM_FILE}" ];then
+				Xdialog --title "$APPNAME $APPVER" --yesno "Play '${STREAM_FILE}' now?" 0 0
+				REPLY=$?
+			else #remove the blank/empty file
+				rm "${STREAM_FILE}" &>/dev/null
+				REPLY=1
+			fi
+
+			if [ $REPLY -eq 0 ];then #if yes , user wants to play file
+				FILE="${STREAM_FILE}"
+				UPDATE_PLAYLIST=true GUITAB=2 play_file #050812 can pass tab to play file #230213
+			else
+				$SELF --tab 2 &
+			fi
+		fi
+	fi
+}
+
+#041012 capture, sort types #061012 dont use background process for run_vlc, cos run_vlc will do it
+#081012 fixes for CAP_TYPE_DIR and capturedir, moved some capture_progress stuff into `ls $DIR | while read LINE`
+#101012 added MAXWAIT to capture progress, different waiting times for each capture type
+capture () {
+
+
+	execute #needed so $CAP_EXT can be got
+
+	# override stream URL, so we can call this func from record fave...
+	# the fave stream will be the ont to record, not the one in Streams Tab
+	[ "$1" != "" ] && STREAM_URL="$1"
+
+	case "true" in
+		$CAP_TYPE_DVD) MAXWAIT=15 ; run_vlc capturedvd ;;
+		$CAP_TYPE_SCREEN) MAXWAIT=15 ; run_vlc capturescreen ;;
+		$CAP_TYPE_V4L) xmessage "CAP_TYPE_V4L not ready yet" ;;
+		$CAP_TYPE_FILE) MAXWAIT=10
+		 	[ "$FILE" = "$C_CAP_OUTPUT" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You should not use the same file for input and ouput." 0 0  && exit 1
+		 	[ ! -f "$FILE" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You must have a valid file selected in the 'File/Disc' tab" 0 0 && exit 1
+			[ -f "$FILE" ] && run_vlc capturefile ;;
+		$CAP_TYPE_URL) MAXWAIT=10 #210213 added urls to capture
+		 	[ "$STREAM_URL" = "$C_CAP_OUTPUT" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You should not use the same file for input and ouput." 0 0  && exit 1
+		 	[ "$STREAM_URL" = "" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You must have a valid stream URL selected in the 'Streams' tab" 0 0 && exit 1
+			[ "$STREAM_URL" != "" ] && run_vlc captureurl ;;
+		$CAP_TYPE_DIR) MAXWAIT=10
+		#081012 many changes and improvents in 'Dir' capture
+		 	[ ! -d "$DIR" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You must have a valid directory selected in the 'Playlists' tab" 0 0 && exit 1
+		 	Xdialog --title "$APPNAME $APPVER" --yesno "The directory '$DIR' (selected in the 'Playlists' tab) \nmust contain only video and audio files! Continue?" 0 0
+			REP=$?
+			if [ $REP -eq 0 ];then
+				#TODO maybe show (editable) list of files to be transcoded here?
+				CAP_DIR_FILE='' #input
+				C_CAP_OUTPUT='' #output
+				CAP_DIR="${DIR%/}/converted/" #dir to store output #101012 fixed cut trailing slash from $DIR
+				mkdir  -p "$CAP_DIR"
+				CAP_DIR_FILES="$(ls "$DIR")" #list of files to use
+				echo "$CAP_DIR_FILES" | while read LINE
+				do
+					CAP_DIR_FILE="${DIR%/}/$LINE" #needed as input #101012 fixed cut trailing slash from $DIR
+					[ -f "$CAP_DIR_FILE" ] || continue
+					#get filename only, no path, no extension, needed to build output
+					C_CAP_OUTPUT="${CAP_DIR}$(basename "${LINE%%.*}")${CAP_EXT}"
+					run_vlc capturedir & # run main VLC func
+					CAP_PID=$!
+					FILE_SIZE=''
+					SAME_SIZE=0
+					PREV_FILE_SIZE=''
+					#081012 much updated
+					capture_progress () {
+						echo "Capturing to $(basename "$C_CAP_OUTPUT").." > "${CAPTUREFILE}"
+						SAME_SIZE=0
+						while [ "$(ps | grep $CAP_PID)" != "" -a "$(ps | grep $XPID)" != "" ];do
+							if [ -s "$C_CAP_OUTPUT" ];then
+								PREV_FILE_SIZE="$FILE_SIZE"
+								FILE_SIZE=$(du -k "$C_CAP_OUTPUT")
+								FILE_SIZE=`echo $FILE_SIZE  | cut -f1 -d' '`
+								[ "$PREV_FILE_SIZE" = "$FILE_SIZE" ] && SAME_SIZE=$(expr $SAME_SIZE + 1) || SAME_SIZE=0
+								echo "${FILE_SIZE}Kb [$SAME_SIZE] $(basename "$C_CAP_OUTPUT")" >> "${CAPTUREFILE}"
+								[ "$SAME_SIZE" = "$MAXWAIT" ] && kill $CAP_PID && break
+							else
+								continue
+							fi
+							sleep 1
+						done
+					}
+					GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+					if [ "$DEBUG" = false ];then
+						# show download progress in tailbox
+						Xdialog --backtitle "Input: $CAP_DIR_FILE \nOutput: ${C_CAP_OUTPUT}\n" --title "$APPNAME $APPVER" --ok-label "Next File" --no-cancel --tailbox "${CAPTUREFILE}" 20 70 &
+						XPID=$!
+						capture_progress
+						kill $RUNVLC_PID; kill $CAP_PID; kill $XPID #kill xdialog menu, vlc, and capturedir
+						#1101012 rename output file, change .mp4 to .m4a if no video codec used
+						[ -f "${C_CAP_OUTPUT}" -a "$CAP_VCODEC" = "NONE" -a "$CAP_EXT" = ".mp4" ] && mv -v "${C_CAP_OUTPUT}" "${C_CAP_OUTPUT//.mp4/.m4a}" && C_CAP_OUTPUT="${C_CAP_OUTPUT//.mp4/.m4a}"
+					fi
+				done
+					# ask to play the files, if they exist and not blank
+					if [ -d "${CAP_DIR}" -a "$(ls /root)" != "" ];then
+						Xdialog --title "$APPNAME $APPVER" --yesno "Play files in '${CAP_DIR}' now?" 0 0
+						REPLY=$?
+					else
+						REPLY=1
+					fi
+					# if answer was yes, play the file, if no, reload GUI
+					if [ $REPLY -eq 0 ];then
+						DIR="${CAP_DIR}"
+						UPDATE_PLAYLIST=true GUITAB=3 play_dir #230213
+					else
+						$SELF --tab 3 &
+					fi
+			else
+				exit 0
+			fi
+		;;
+	esac
+	export CAP_PID=$! #010313
+	capture_progress () {
+		echo "Capturing now, please wait...." > "${CAPTUREFILE}"
+		FILE_SIZE=''
+		SAME_SIZE=''
+		PREV_FILE_SIZE=''
+		while [ "$(ps | grep $CAP_PID)" != "" -a "$(ps | grep $XPID)" ];do
+			if [ -s "$C_CAP_OUTPUT" ];then
+				PREV_FILE_SIZE="$FILE_SIZE"
+				FILE_SIZE=$(du -k "$C_CAP_OUTPUT")
+				FILE_SIZE=`echo $FILE_SIZE  | cut -f1 -d' '`
+				[ "$PREV_FILE_SIZE" = "$FILE_SIZE" ] && SAME_SIZE=$(expr $SAME_SIZE + 1) || SAME_SIZE=0
+				echo "${FILE_SIZE}Kb [$SAME_SIZE] $(basename "$C_CAP_OUTPUT")" >> "${CAPTUREFILE}"
+				[ "$SAME_SIZE" = "$MAXWAIT" ] && kill $CAP_PID && break
+			else
+				continue
+			fi
+			sleep 1
+		done
+	}
+	#061012 clean up of debug handling
+	if [ "$CAP_TYPE_DIR" = false -a "$DEBUG" = false ];then #081012 dont run progress dialog here if transcoding multiple files form dir $DIR
+		GUIPID=`cat $GUIPIDFILE`; kill $GUIPID
+		# show download progress in tailbox
+		Xdialog --backtitle "[$CAP_PID] Capturing to file: ${C_CAP_OUTPUT}\n" --title "$APPNAME $APPVER" --ok-label "Stop Now" --no-cancel --tailbox "${CAPTUREFILE}" 20 70 & #010313
+		XPID=$!
+		capture_progress
+		kill $RUNVLC_PID; kill $CAP_PID; kill $XPID #kill xdialog menu, vlc, and capture* func
+		#1101012 rename output file, change .mp4 to .m4a if no video codec used
+		[ -f "${C_CAP_OUTPUT}" -a "$CAP_VCODEC" = "NONE" -a "$CAP_EXT" = ".mp4" ] && mv -v "${C_CAP_OUTPUT}" "${C_CAP_OUTPUT//.mp4/.m4a}" && C_CAP_OUTPUT="${C_CAP_OUTPUT//.mp4/.m4a}"
+		# ask to play the file, it exists and not blank
+		if [ -f "${C_CAP_OUTPUT}" ] && [ -s "${C_CAP_OUTPUT}" ];then
+			Xdialog --title "$APPNAME $APPVER" --yesno "Play '${C_CAP_OUTPUT}' now?" 0 0
+			REPLY=$?
+		else #remove the blank/empty file
+			rm "${C_CAP_OUTPUT}" &>/dev/null
+			REPLY=1
+		fi
+		# if answer was yes, play the file, if no, reload GUI
+		if [ $REPLY -eq 0 ];then
+			FILE="${C_CAP_OUTPUT}"
+			UPDATE_PLAYLIST=true GUITAB=3 play_file #240213
+		else
+			$SELF --tab 3 &
+		fi
+	fi
+}
+
+run_vlc () { #030912 new function to run the actual VLC commands, reduces calls to execute and kill_vlc
+	TYPE=''
+	TYPE="$1"
+	if [ "$TYPE" != "" ];then
+		execute
+		#010313 removed vlc://quit for vlc versions < 1.1.x, see $VLCQUIT
+		[ $VLCVERSION -gt 10 ] && VLCQUIT="vlc://quit" || VLCQUIT=""
+		#kill_vlc #121012 added &>>"$LOGFILE" to enable logging (LOGFILE is /dev/null if logging is disabled) #151012 dont kill vlc everytime
+		case "$TYPE" in
+			#171012 added vlc://quit to most cmds, OSC will detect when VLC ends, then OSC will quit
+			#260213 fix for bash3, change `&>> "$LOGFILE"` to `2>&1 2>>"$LOGFILE" &`
+			file) $CL cvlc $C "$FILE" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			tmpm3u) $CL cvlc $C /tmp/vlc-gtk-tmp_$(whoami).m3u $VLCQUIT 2>&1 2>>"$LOGFILE" & ;; #280213 use by audio playlist, to auto play next file (using tmp m3u file)
+			dir) $CL cvlc $C /tmp/vlc-gtk-playlist_$(whoami).m3u 2>&1 2>>"$LOGFILE" & ;; #100913 dont use "${DIR}"
+			playlist) $CL cvlc $C "$PLAYLIST_DIR/$PLAYLIST" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			dvdsimple) $CL cvlc $C --dvd /dev/$DVD_DEV dvdsimple:// $VLCQUIT 2>&1 2>>"$LOGFILE" & ;; #121012 simple DVD playback
+			dvd) $CL cvlc $C --dvd /dev/$DVD_DEV dvd:// $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			vcd) $CL cvlc $C --vcd /dev/$CD_DEV vcd:// $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			audiocd) $CL cvlc $C --cd-audio /dev/$CD_DEV cdda:// $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			streamurl) $CL cvlc $C "${STREAM_URL##*|}" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			streamurlfave) $CL cvlc $C ${FAVE_STREAM_URL##*|} $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			streamrtmp) $STREAM_URL | cvlc $C $CACHE_OPT --meta-title "$NAME" - &>/dev/null $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			streamrtmpfave) $FAVE_STREAM_URL | cvlc $C $CACHE_OPT --meta-title "$NAME" - &>/dev/null $VLCQUIT 2>&1 2>>"$LOGFILE" & ;; # added $C
+			streamdownload) rm "${STREAM_FILE}"; $CL cvlc $C --sout "${STREAM_FILE}" "${FAVE_STREAM_URL}" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;; # added $C
+			streamdownloadrtmp) $CL ${FAVE_STREAM_URL} -o "${STREAM_FILE}" &> "${STREAMDWNLDFILE}" & ;; #151012
+			#220912 added support for youtube URLs
+			youtube) $CL cvlc $C "${STREAM_URL}&fmt=$YOUTUBE_FMT" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			youtubefave) $CL cvlc $C "${FAVE_STREAM_URL}&fmt=$YOUTUBE_FMT" $VLCQUIT 2>&1 2>>"$LOGFILE" & ;;
+			sopcast) killall $SOPCASTBIN
+				if [ "$CL" = '' ];then
+					Xdialog --title "$APPNAME $APPVER" --msgbox "This is a Sopcast stream, which can be slow to start... Please wait." 0 0 &
+					XPID=$!
+					($SOPCASTBIN "${STREAM_URL}" 8908 $SOPCAST_PORT &>/dev/null &); SOP_PID=$(pidof $SOPCASTBIN); echo $SOP_PID > ${SOPPIDFILE}; sleep 10
+				fi
+				kill $XPID
+				$CL cvlc $C http://127.0.0.1:${SOPCAST_PORT}/tv.asf $VLCQUIT 2>&1 2>>"$LOGFILE"
+			;;
+			sopcastfave)
+				if [ "$CL" = '' ];then
+					Xdialog --title "$APPNAME $APPVER" --msgbox "This is a Sopcast stream, which can be slow to start... Please wait." 0 0 &
+					XPID=$!
+					($SOPCASTBIN "${FAVE_STREAM_URL}" 8908 $SOPCAST_PORT &>/dev/null &); SOP_PID=$(pidof $SOPCASTBIN); echo $SOP_PID > ${SOPPIDFILE}; sleep 10
+				fi
+				kill $XPID
+				$CL cvlc $C http://127.0.0.1:${SOPCAST_PORT}/tv.asf $VLCQUIT 2>&1 2>>"$LOGFILE"
+			;;
+			sopcastfavedownload)
+				if [ "$CL" = '' ];then
+					Xdialog --title "$APPNAME $APPVER" --msgbox "This is a Sopcast stream, which can be slow to start... Please wait." 0 0 &
+					XPID=$!
+					($SOPCASTBIN "${FAVE_STREAM_URL}" 8908 $SOPCAST_PORT &>/dev/null &); SOP_PID=$(pidof $SOPCASTBIN); echo $SOP_PID > ${SOPPIDFILE}; sleep 10
+					rm "${STREAM_FILE}"
+				fi
+				kill $XPID
+				$CL cvlc $C --sout "${STREAM_FILE}" http://127.0.0.1:${SOPCAST_PORT}/tv.asf $VLCQUIT 2>&1 2>>"$LOGFILE"
+			;;
+			#041012 capture support #061012 use background processes, use C_* in transcode, don't overwrite original VARs
+			#061012 added many more options, fixes for blank screen options #171012 added CAP_FORMAT
+			capturescreen) $CL cvlc $C_CAP_DURATION $C $CAP_VIDEO $CAP_AUDIO --sout "#transcode{${C_CAP_VCODEC}${C_CAP_ACODEC}${C_CAP_SCALE}${C_CAP_BITRATE}${C_CAP_ABITRATE}${C_CAP_ACHANNELS}${C_CAP_SAMPLERATE}${C_CAP_DEINT}${C_CAP_FPS}audio-sync${C_CAP_FORMAT}${C_CAP_ADV}}:standard{access=file,dst='${C_CAP_OUTPUT}'}" screen:// --screen-fps ${CAP_FPS:-12} --screen-caching ${CAP_SCREEN_CACHE:-1000} $CAP_SCREEN_FOLLOWMOUSE 2>&1 2>>"$LOGFILE" & ;;
+			capturefile) $CL cvlc $C_CAP_DURATION $C $CAP_VIDEO $CAP_AUDIO --sout "#transcode{${C_CAP_VCODEC}${C_CAP_ACODEC}${C_CAP_SCALE}${C_CAP_BITRATE}${C_CAP_ABITRATE}${C_CAP_ACHANNELS}${C_CAP_SAMPLERATE}${C_CAP_DEINT}${C_CAP_FPS}audio-sync${C_CAP_FORMAT}${C_CAP_ADV}}:standard{access=file,dst='${C_CAP_OUTPUT}'}" "$FILE" 2>&1 2>>"$LOGFILE" & ;;
+			captureurl) $CL cvlc $C_CAP_DURATION $C $CAP_VIDEO $CAP_AUDIO --sout "#transcode{${C_CAP_VCODEC}${C_CAP_ACODEC}${C_CAP_SCALE}${C_CAP_BITRATE}${C_CAP_ABITRATE}${C_CAP_ACHANNELS}${C_CAP_SAMPLERATE}${C_CAP_DEINT}${C_CAP_FPS}audio-sync${C_CAP_FORMAT}${C_CAP_ADV}}:standard{access=file,dst='${C_CAP_OUTPUT}'}" "$STREAM_URL" 2>&1 2>>"$LOGFILE" & ;; #210213
+			capturedir) $CL cvlc $C_CAP_DURATION $C $CAP_VIDEO $CAP_AUDIO --sout "#transcode{${C_CAP_VCODEC}${C_CAP_ACODEC}${C_CAP_SCALE}${C_CAP_BITRATE}${C_CAP_ABITRATE}${C_CAP_ACHANNELS}${C_CAP_SAMPLERATE}${C_CAP_DEINT}${C_CAP_FPS}audio-sync${C_CAP_FORMAT}${C_CAP_ADV}}:standard{access=file,dst='${C_CAP_OUTPUT}'}" "$CAP_DIR_FILE" ;;
+			capturedvd) $CL cvlc $C_CAP_DURATION $C $CAP_VIDEO $CAP_AUDIO --sout "#transcode{${C_CAP_VCODEC}${C_CAP_ACODEC}${C_CAP_SCALE}${C_CAP_BITRATE}${C_CAP_ABITRATE}${C_CAP_ACHANNELS}${C_CAP_SAMPLERATE}${C_CAP_DEINT}${C_CAP_FPS}audio-sync${C_CAP_FORMAT}${C_CAP_ADV}}:standard{access=file,dst='${C_CAP_OUTPUT}'}" dvdsimple:// 2>&1 2>>"$LOGFILE" & ;; #061012 use dvdsimple, avoid menus
+			#capturev4l) ;;
+			#sendstream)
+		esac
+		export RUNVLC_PID=$! #181012 do this here, only playback added to list below, but all processes should have this VAR as their PID for consistency
+		#151012 build list of vlc PIDs to kill, can then kill the 1st PID, then the next etc... do not include the run_vlc cmds that kill themselves via the progress dialogs
+		[ "$TYPE" != "sopcastfavedownload" -a "$TYPE" != "streamdownload" -a "$TYPE" != "streamdownloadrtmp" -a "$TYPE" != "capturescreen" -a "$TYPE" != "capturefile" -a "$TYPE" != "capturedir" -a "$TYPE" != "capturedvd" ] && echo $RUNVLC_PID >> ${VLCPIDFILE} #081012 #161012 export the var
+	fi
+}
+
+launch_osc () { #060912 - loaded by OSC btn in main GUI, get latest OSC value, then run vlc-gtk-osc
+	. $CONFIG #read config file
+	[ "$OSC" = "stream" ] && GUITAB=2 || GUITAB=0
+	get_vlc_pids #040213 keep RUNVLC_PID up to date, stops instant reset of OSC...?
+	OSC=$OSC DISABLE_OSC=false GUITAB=$GUITAB vlc-gtk-osc $FULL $PLAYNOW &
+}
+
+set_gtkrc () { #040213 override font size settings #180213 updated path to file, renamed func, set icon size as well..
+	CURRFONTNAME="`cat $HOME/.gtkrc-2.0 | grep font_name | cut -d '=' -f2 | cut -d ' ' -f2-3 | sed 's/\"//g'`"
+	#CURRFONTNAME=DejaVu
+	case "$CURRFONTNAME" in
+		Deja*) FONTSIZE=10 ;;
+		Nimbus*) FONTSIZE=10 ;;
+		Ionic*) FONTSIZE=10 ;;
+		Sans*) FONTSIZE=10 ;;
+		Ubuntu*) FONTSIZE=11 ;;
+		*)FONTSIZE=10 ;;
+	esac
+	echo "style \"specialsize\"
+{
+  font_name=\"$CURRFONTNAME $FONTSIZE\"
+}
+gtk-icon-sizes=\"panel-menu=20,20:panel=20,20:gtk-menu=20,20:gtk-large-toolbar=20,20:gtk-small-toolbar=20,20:gtk-button=20,20\"
+widget \"*\" style \"specialsize\"
+class \"*\" style \"specialsize\"" > "${HOME}/.vlc-gtk/gtkrc_size"
+	export GTK2_RC_FILES="${HOME}/.vlc-gtk/gtkrc_size:${HOME}/.gtkrc-2.0"
+}
+
+debugger () { #020912 new debugger thingy, replaces xmessage
+	#echo ${@} | fold -sw 60 | sed -e 's/$/\ \\ /g' > /tmp/vlc-cmd.txt #061012 try to wordwrap and append a backslash to each line
+	CMD="${@}"
+	#220912 added run_vlc $TYPE to window title
+	RETVAL=`$GTKDIALOG -s <<< '<window title="'$APPNAME' '$APPVER' Debugger: run_vlc ('$TYPE')">
+	<vbox>
+		<text width-request="500"><label>"Here is the VLC command. You can edit it and click Run to execute the command."</label></text>
+		<edit indent="1" editable="true">
+			<variable>CMD1</variable>
+			<width>500</width><height>100</height>
+			<default>'"$CMD"'</default>
+		</edit>
+		<hbox>
+			<button>
+				<label>Run</label>
+				<input file stock="gtk-execute"></input>
+				<action type="exit">RUN_CMD</action>
+			</button>
+			<button>
+				<label>Quit</label>
+				<input file stock="gtk-cancel"></input>
+				<action type="exit">EXIT_NOW</action>
+			</button>
+		</hbox>
+	</vbox>
+</window>'`
+eval "$RETVAL"
+[ "$EXIT" = "RUN_CMD" ] && $CMD1 &
+}
+
+execute (){ #this function is key - save the new settings to the config file, and builds the command needed for run_vlc
+	export GTK2_RC_FILES="${HOME}/.gtkrc-2.0"	#reset gtk-theme
+	write_config #keep settings for next startup
+
+	[ "$DEBUG" = true ] && CL='debugger' || CL='' #020912, do this here, makes it settable by GUI, use new debugger
+
+	# set the saved settings - append $C, which contains all options saved
+	# $C is added to all vlc commands, so these options are global
+
+	# reset the command
+	C="" #BK #231212 `-I dummy` not needed now, run_vlc always uses cvlc
+
+## general options
+
+	# set random playback
+	[ "$SHUFFLE" = true ] && C="$C --random" || C="$C"
+
+	# set looped playback
+	[ "$LOOP" = true ] && C="$C --loop" || C="$C"
+
+	# set play and stop
+	[ "$PLAY_STOP" = true ] && C="$C --play-and-stop" || C="$C"
+
+## video options
+
+	# set fullscreen
+	[ "$FULL" = true ] && C="$C --fullscreen" || C="$C" #BK #010912 fixed, don't reset previous options
+
+	# set cropped image
+	 case $CROP in
+	  16:10) C="$C --crop 16:10" ;;
+	  16:9) C="$C --crop 16:9" ;;
+	  1:1) C="$C --crop 1:1" ;;
+	  221:100) C="$C --crop 221:100" ;;
+	  4:3) C="$C --crop 4:3" ;;
+	  5:4) C="$C --crop 5:4" ;;
+	  Auto) C="$C --auto-crop" ;;
+	  *) C="$C" ;;
+	 esac
+
+	# set aspect ratio
+	 case $ASPECT in
+	  16:10) C="$C --aspect-ratio 16:10" ;;
+	  16:9) C="$C --aspect-ratio 16:9" ;;
+	  1:1) C="$C --aspect-ratio 1:1" ;;
+	  221:100) C="$C --aspect-ratio 221:100" ;;
+	  4:3) C="$C --aspect-ratio 4:3" ;;
+	  5:4) C="$C --aspect-ratio 5:4" ;;
+	  *) C="$C" ;;
+	 esac
+
+	# set video output module
+	if [ $VLCVERSION -ge 11 ];then #ex: 1.1.5
+	 case $VOUT in
+	  X11) C="$C --vout xcb_x11" ;;
+	  XVideo) C="$C --vout xcb_xv" ;;
+	  SDL) C="$C --vout vout_sdl" ;;
+	  GLX) C="$C --vout xcb_glx" ;;
+	  SVGAlib) C="$C --vout svgalib" ;;
+	  *) C="$C --vout xcb_xv" ;; #280812 use Xvideo as default, not X11
+	 esac
+	else
+		case $VOUT in
+		  X11) C="$C --vout x11" ;;
+		  XVideo) C="$C --vout xv" ;;
+		  SDL) C="$C --vout sdl" ;;
+		  GLX) C="$C --vout glx" ;;
+		  SVGAlib) C="$C --vout svgalib" ;;
+		  *) C="$C --vout xv" ;; # 2.3.3 #280812 use Xvideo as default, not X11
+	 	esac
+	fi
+	#131012 replace xvideo with x11 if using vesa xorg module, or xvesa server
+	[ "`readlink $(which X) 2>/dev/null`" = "Xvesa" ] && C="${C/xv/x11}"
+	[ -f /etc/X11/xorg.conf ] && [ "`grep 'card0driver' /etc/X11/xorg.conf | grep '"vesa"'`" != "" ] && C="${C/xv/x11}"
+
+	# set always on top or not
+	[ "$ON_TOP" = true ] && C="$C --video-on-top" || C="$C --no-video-on-top"
+
+	# set overlay or not
+	[ "$OVERLAY" = true ] && C="$C --overlay" || C="$C --no-overlay"
+
+## audio options
+
+	# set audio options
+	[ "$AUDIO" = false ] && C="$C --no-audio" || C="$C"
+
+	# set dolby or not
+	 case $DOLBY in
+	  Auto) C="$C --force-dolby-surround 0" ;;
+	  On) C="$C --force-dolby-surround 1" ;;
+	  *) C="$C --force-dolby-surround 2" ;;
+	 esac
+
+	#020912 equalizer
+	 [ "$EQUALIZER" != "flat" ] && C="$C --equalizer-preset $EQUALIZER" || C="$C"
+
+	# set volume option for current VLC version.. ex: 1.1.5
+	[ $VLCVERSION -ge 11 ] && VOLOPT="--volume" || VOLOPT="--vol"
+	case $VOL in
+	  Off) C="$C $VOLOPT 000" ;;
+	  3) C="$C" ;; # this is default, don't change anything
+	  *) C="$C $VOLOPT $VOL"00 ;; # append the value given with two zeros
+    esac
+
+## subtitle options
+
+	# set AUTO subtitles
+	[ "$AUTO_SUBS" = true ] && C="$C --sub-autodetect-file" || C="$C --no-sub-autodetect-file"
+
+	# set subtitles, if they exist
+	if [ -e "$SUBS" ] && [ "$AUTO_SUBS" = false ];then
+	  # create a link without spaces
+	  ln -s -f "$SUBS" "/tmp/vlc-gtk_subs_$(whoami).srt" #070812 add user to filename
+	  # add tmp sub file to command
+	  C="$C --sub-file /tmp/vlc-gtk_subs_$(whoami).srt" #070812
+	else
+	  C="$C"
+	fi
+
+	#	# set subs delay #100812 added the working option, enabled the dropdown in GUI plus some fixes #230912 more fixes for `expr` errors
+		if [ "$SUBS_DELAY" != "0" ] && [ "$SUBS_DELAY" != "" ];then
+			if [ $VLCVERSION -ge 08 ];then #ex: 0.8.6
+				 C="$C --sub-delay=$(expr ${SUBS_DELAY} \* 10)" || C="$C" # VLC 0.9.2 and later use tenths of a second #230912 add backslash to *
+			else
+				C="$C --subsdelay-mode=0 --subsdelay-factor=${SUBS_DELAY}" || C="$C" # uses seconds
+			fi
+		fi
+
+	# set on screen display or not
+	[ "$OSD" = false ] && C="$C --no-osd" || C="$C"
+
+## osd options
+
+	# set on screen display font
+	if [ -e "$OSD_FONT" ];then
+	  # create a link without spaces
+	  ln -s -f "$OSD_FONT" "/tmp/vlc-gtk_font_$(whoami).ttf" #070812 add user to filename
+	  # add tmp sub file to command
+	  C="$C --freetype-font /tmp/vlc-gtk_font_$(whoami).ttf" #070812
+	else
+	  C="$C"
+	fi
+
+	# set on screen display font
+	 case $OSD_FONT_SIZE in
+	  Tiny) C="$C --freetype-rel-fontsize 32" ;;
+	  Smaller) C="$C --freetype-rel-fontsize 24" ;;
+	  Small) C="$C --freetype-rel-fontsize 16" ;;
+	  Normal) C="$C --freetype-rel-fontsize 12" ;;
+	  Large) C="$C --freetype-rel-fontsize 10" ;;
+	  Larger) C="$C --freetype-rel-fontsize 8" ;;
+	  Huge) C="$C --freetype-rel-fontsize 6" ;;
+	  *) C="$C" ;;
+	 esac
+
+	[ $VLCVERSION -ge 22 ] && OSD_POS=''
+
+	# set on screen display position #041012 use case, not if
+	case "$OSD_POS" in
+		Left) C="$C --osdmenu-position 1 --video-title-position 1" ;;
+		Right) C="$C --osdmenu-position 2 --video-title-position 2" ;;
+		Top) C="$C --osdmenu-position 4 --video-title-position 4" ;;
+		Bottom) C="$C --osdmenu-position 8 --video-title-position 8" ;;
+		Top-Left) C="$C --osdmenu-position 5 --video-title-position 5" ;;
+		Top-Right) C="$C --osdmenu-position 6 --video-title-position 6" ;;
+		Bottom-Left) C="$C --osdmenu-position 9 --video-title-position 9" ;;
+		Bottom-Right) C="$C --osdmenu-position 10 --video-title-position 10" ;;
+		Center) C="$C --osdmenu-position 0 --video-title-position 0" ;;
+		*) C="$C" ;;
+	esac
+
+	#[ $VLCVERSION -ge 22 ] && OSD_FX=''
+
+	# set on screen display effects
+	 case $OSD_FX in
+	  Background) C="$C --freetype-effect 1" ;;
+	  Outline) C="$C --freetype-effect 2" ;;
+	  Fat-Outline) C="$C --freetype-effect 3" ;;
+	  *) C="$C" ;;
+	 esac
+
+	[ $VLCVERSION -ge 22 ] && OSD_TIMEOUT=''
+
+	[ "$OSD_TIMEOUT" != "" ] && C="$C --osdmenu-timeout $OSD_TIMEOUT" #240912
+
+	#240912 network
+	#270213 need to check VLC ver, and use appropriate caching options
+	#280213 fixes for vlc portability in setting cache options, can disable by blanking them
+	if [ "$HTTP_CACHING" != "" -a "$MMS_CACHING" != "" ];then
+		if [ $VLCVERSION -gt 11 ];then # if vlc 2 or above
+			CACHE_OPT=""
+			[ "$HTTP_CACHING" != "" ] && C="$C --network-caching=$HTTP_CACHING"
+		elif [ $VLCVERSION -eq 11 ];then #if vlc 1.1.x .... 1.1.5 -> 11
+			CACHE_OPT="--network-caching=$MMS_CACHING"
+			[ "$HTTP_CACHING" != "" ] && C="$C --http-caching=$HTTP_CACHING"
+			[ "$MMS_CACHING" != "" ] && C="$C --mms-caching=$MMS_CACHING"
+		elif [ $VLCVERSION -gt 08 ];then #if newer than vlc 0.8.x ..... 0.8.6 -> 08 ..
+			CACHE_OPT=""
+			[ "$HTTP_CACHING" != "" ] && C="$C --http-caching=$HTTP_CACHING"
+			[ "$MMS_CACHING" != "" ] && C="$C --mms-caching=$MMS_CACHING"
+		elif [ $VLCVERSION -eq 08 ];then #if vlc 0.8.x .... 0.8.6 -> 08
+			CACHE_OPT=""
+			C="$C"
+		fi
+	fi
+
+	[ $VLCVERSION -ge 22 ] && IPV46=''
+
+	case $IPV46 in
+		ipv4) C="$C --ipv4" ;;
+		ipv6) C="$C --ipv6" ;;
+		*) C="$C" ;;
+	esac
+	# youtube playback format, see http://en.wikipedia.org/wiki/YouTube#ref_media_type_table_note_1
+	case $YOUTUBE in
+		240p) YOUTUBE_FMT=5 ;;  #5=flv, 82=mp4
+		360p) YOUTUBE_FMT=18 ;; #18=mp4 , 34=flv
+		480p) YOUTUBE_FMT=35 ;; #35=flv,
+		720p) YOUTUBE_FMT=22 ;; #22=mp4,
+		1080p) YOUTUBE_FMT=37 ;; #37=mp4
+		*) YOUTUBE_FMT=18 ;;
+	esac
+
+	# more advanced options
+	#270213 fixed for older vlcs
+	if [ $VLCVERSION -gt 09 ];then
+		[ "$FF_FAST" = true ] && C="$C --ffmpeg-fast" || C="$C --no-ffmpeg-fast"
+	else
+		[ "$FF_FAST" = true ] && C="$C --ffmpeg-hurry-up" || C="$C"
+	fi
+	#270213 fix for older vlcs
+	if [ $VLCVERSION -gt 08 ];then
+		[ "$FF_DR" = true ]  && C="$C --ffmpeg-dr" || C="$C --no-ffmpeg-dr" #240912
+		[ "$SUBPIC" = true ] && C="$C --spu" || C="$C --no-spu" #240912
+	fi
+
+	[ "$CLI_OPT" != "" ] && C="$C $CLI_OPT" || C="$C"
+
+	#041012 capture options #061012 use C_* in transcode options, so as to not overwrite original VARs
+	CAP_VIDEO='' CAP_AUDIO=''
+	#061012 added fps, audio bitrate, audio channels, deinterlace, samplerate, etc
+	#071012 fixed blanking of capture options, see -a bits
+	[ "$CAP_BITRATE" = "SAME" ] && C_CAP_BITRATE=""
+	[ "$CAP_ABITRATE" = "SAME" ] && C_CAP_ABITRATE=""
+	[ "$CAP_ACHANNELS" = "SAME" ] && C_CAP_ACHANNELS=""
+	[ "$CAP_SAMPLERATE" = "SAME" ] && C_CAP_SAMPLERATE=""
+	[ "$CAP_SCALE" = "SAME" ] && C_CAP_SCALE=""
+	[ "$CAP_FPS" = "SAME" ] && C_CAP_FPS=""
+	[ "$CAP_BITRATE" != "" -a "$CAP_BITRATE" != "SAME" ] && C_CAP_BITRATE="vb=$CAP_BITRATE,"
+	[ "$CAP_ABITRATE" != "" -a "$CAP_ABITRATE" != "SAME" ] && C_CAP_ABITRATE="ab=$CAP_ABITRATE,"
+	[ "$CAP_ACHANNELS" != "" -a "$CAP_ACHANNELS" != "SAME" ] && C_CAP_ACHANNELS="channels=$CAP_ACHANNELS,"
+	[ "$CAP_SAMEPLERATE" != "" -a "$CAP_SAMPLERATE" != "SAME" ] && C_CAP_SAMPLERATE="samplerate=$CAP_SAMPLERATE,"
+	[ "$CAP_SCALE" != "" -a "$CAP_SCALE" != "SAME" ] && C_CAP_SCALE="scale=$CAP_SCALE,"
+	[ "$CAP_FPS" != "" -a "$CAP_FPS" != "SAME" ] && C_CAP_FPS="fps=$CAP_FPS,"
+	[ "$CAP_DEINT" = true ] && C_CAP_DEINT="deinterlace," || C_CAP_DEINT=''
+	[ "$CAP_ADV" != "" ] && C_CAP_ADV=",${CAP_ADV}" || C_CAP_ADV=""
+	#201012 accept formats 30 and 30-60.. if 2nd format, use start and stop times #could have much better checking here
+	if [ "$CAP_DURATION" != "" ];then
+			[ "${CAP_DURATION%%-*}" != "${CAP_DURATION##*-}" -a "${CAP_DURATION##*-}" != "" ] && C_CAP_DURATION="--start-time=${CAP_DURATION%%-*} --stop-time=${CAP_DURATION##*-}" || C_CAP_DURATION="--stop-time=${CAP_DURATION%%-*}"
+	else
+		C_CAP_DURATION=""
+	fi
+	[ "$CAP_SCREEN_FOLLOWMOUSE" = true ] && CAP_SCREEN_FOLLOWMOUSE="--screen-follow-mouse" || CAP_SCREEN_FOLLOWMOUSE="--no-screen-follow-mouse"
+	[ "$CAP_TYPE_DIR" != true ] && C_CAP_OUTPUT="${SAVEDIR}/${CAP_OUTPUT}${CAP_EXT}" #270213 use savedir
+	case $CAP_VCODEC in
+		SAME) CAP_EXT=''; C_CAP_VCODEC='' ;;
+		NONE) CAP_EXT=''; C_CAP_VCODEC='vcodec=dummy,'; C_CAP_SCALE=''; C_CAP_BITRATE=''; C_CAP_FPS=''; C_CAP_DEINT=''; C_CAP_FORMAT=''; CAP_VIDEO='--no-sout-display-video --no-video' ;; #101012 fixes to create audio only output #181012 disable CAP_FORMAT if no video
+		mp1v) CAP_EXT='.mpg'; C_CAP_VCODEC='vcodec=mp1v,' ;;
+		mp2v) CAP_EXT='.mpg'; C_CAP_VCODEC='vcodec=mp2v,' ;;
+		mp4v) CAP_EXT='.mp4'; C_CAP_VCODEC='vcodec=mp4v,' ;;
+		DIV1) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=DIV1,' ;;
+		DIV2) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=DIV2,' ;;
+		DIV3) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=DIV3,' ;;
+		DVDv) CAP_EXT='.vob'; C_CAP_VCODEC='vcodec=DVDv,' ;;
+		DVDv) CAP_EXT='.vob'; C_CAP_VCODEC='vcodec=DVDv,' ;;
+		WMV1) CAP_EXT='.wmv'; C_CAP_VCODEC='vcodec=WMV1,' ;;
+		WMV2) CAP_EXT='.wmv'; C_CAP_VCODEC='vcodec=WMV2,' ;;
+		H263) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=H263,' ;;
+		H264) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=H264,' ;;
+		theo) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=theo,' ;;
+		FLV1) CAP_EXT='.flv'; C_CAP_VCODEC='vcodec=FLV1,' ;;
+		MSVC) CAP_EXT='.mpg'; C_CAP_VCODEC='vcodec=MSVC,' ;;
+		MRLE) CAP_EXT='.mpg';C_CAP_VCODEC='vcodec=MRLE,' ;;
+		FLIC) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=FLIC,' ;;
+		QPEG) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=QPEG,' ;;
+		VP8) CAP_EXT='.avi'; C_CAP_VCODEC='vcodec=VP8,' ;;
+		*) CAP_EXT='.avi'; C_CAP_VCODEC='' ;;
+	esac
+	#101012 fixes for creation of audio files, change filetype if no video
+	case $CAP_ACODEC in
+		SAME) C_CAP_ACODEC='' ;;
+		NONE) C_CAP_ACODEC='acodec=dummy,'; C_CAP_ABITRATE=''; C_CAP_ACHANNELS=''; C_CAP_SAMPLERATE=''; CAP_AUDIO='--no-sout-display-audio --no-audio' ;;
+		mpga) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.mpg'; C_CAP_ACODEC='acodec=mpga,' ;;
+		mp2a) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.mp2'; C_CAP_ACODEC='acodec=mp2a,' ;;
+		mp3) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.mp3'; C_CAP_ACODEC='acodec=mp3,' ;;
+		mp4a) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.mp4'; C_CAP_ACODEC='acodec=mp4a,' ;;
+		a52) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.wma'; C_CAP_ACODEC='acodec=a52,' ;;
+		aac) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.mp4'; C_CAP_ACODEC='acodec=aac,' ;;
+		s16l) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.wav'; C_CAP_ACODEC='acodec=s16l,' ;;
+		s24l) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.wav'; C_CAP_ACODEC='acodec=s24l,' ;;
+		s32l) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.wav'; C_CAP_ACODEC='acodec=s32l,' ;;
+		vorb) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.ogg'; C_CAP_ACODEC='acodec=vorb,' ;;
+		spx) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.spx'; C_CAP_ACODEC='acodec=spx,' ;;
+		flac) [ "$CAP_VCODEC" = "NONE" ] && CAP_EXT='.flac'; C_CAP_ACODEC='acodec=flac,' ;;
+		*) C_CAP_ACODEC='' ;;
+	esac
+
+	#171012 more transcode options: format, aspect ratio, crop, #181012 fixes, use vfilter{}, cropadd{}, canvas{}
+	if [ "$CAP_VCODEC" != "NONE" ];then #only enable if video codec used
+		case "$CAP_FORMAT" in
+		PAL,4:3) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=768,height=576,aspect=4:3}}' ;; #might need w=720
+		PAL,4:3,crop) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=720,height=544,aspect=4:3}}' ;; #might need w=768
+		PAL,4:3,stretch) C_CAP_SCALE=''; C_CAP_FORMAT=',width=768,height=544' ;; #might need w=720
+		PAL,16:9) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=1024,height=576,aspect=16:9}}' ;; #might need w=960
+		PAL,16:9,crop) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=960,height=544,aspect=16:9}}' ;; #might need w=1024
+		PAL,16:9,stretch) C_CAP_SCALE=''; C_CAP_FORMAT=',width=1024,height=544' ;; #might need w=960
+		NTSC,4:3) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=608,height=448,aspect=4:3}}' ;;
+		NTSC,4:3,crop) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=608,height=448,aspect=16:9}}' ;;
+		NTSC,4:3,stretch) C_CAP_SCALE=''; C_CAP_FORMAT=',width=608,height=448' ;;
+		NTSC,16:9) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=800,height=448,aspect=16:9}}' ;;
+		NTSC,16:9,crop) C_CAP_SCALE=''; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=800,height=448,aspect=16:9}}' ;;
+		NTSC,16:9,stretch) C_CAP_SCALE=''; C_CAP_FORMAT=',width=800,height=448' ;;
+		BBCurve) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp4v,'; C_CAP_BITRATE='vb=400,'; C_CAP_FPS='fps=24,'; C_CAP_SAMPLERATE='samplerate=22050,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=48,'; CAP_EXT='.mp4'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=240,aspect=4:3}}' ;;
+		BBCurve,Wide) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp4v,'; C_CAP_BITRATE='vb=400,'; C_CAP_FPS='fps=24,'; C_CAP_SAMPLERATE='samplerate=22050,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=48,'; CAP_EXT='.mp4'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=180,aspect=16:9}}' ;;
+		#201012 added DVD mpeg stuff... from vlc wiki
+		DVD,PAL,LQ,4:3) C="$C --sout-ffmpeg-keyint 16 --sout-ffmpeg-strict 1 --sout-ffmpeg-hurry-up"; C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp2v,'; C_CAP_BITRATE='vb=4096,'; C_CAP_FPS='fps=25,'; C_CAP_SAMPLERATE='samplerate=48000,'; C_CAP_ACODEC='acodec=a52,'; C_CAP_ABITRATE='ab=192,'; C_CAP_ACHANNELS='channels=2,'; CAP_EXT='.mpg'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=352,height=576,aspect=4:3}}' ;;
+		DVD,PAL,HQ,4:3) C="$C --sout-ffmpeg-keyint 16 --sout-ffmpeg-strict 1"; C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp2v,'; C_CAP_BITRATE='vb=4096,'; C_CAP_FPS='fps=25,'; C_CAP_SAMPLERATE='samplerate=48000,'; C_CAP_ACODEC='acodec=a52,'; C_CAP_ABITRATE='ab=384,'; C_CAP_ACHANNELS='channels=2,'; CAP_EXT='.mpg'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=720,height=576,aspect=4:3}}' ;;
+		DVD,NTSC,LQ,4:3) C="$C --sout-ffmpeg-keyint 16 --sout-ffmpeg-strict 1 --sout-ffmpeg-hurry-up"; C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp2v,'; C_CAP_BITRATE='vb=4096,'; C_CAP_FPS='fps=29.97,'; C_CAP_SAMPLERATE='samplerate=48000,'; C_CAP_ACODEC='acodec=a52,'; C_CAP_ABITRATE='ab=192,'; C_CAP_ACHANNELS='channels=2,'; CAP_EXT='.mpg'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=352,height=480,aspect=4:3}}' ;;
+		DVD,NTSC,HQ,4:3) C="$C --sout-ffmpeg-keyint 16 --sout-ffmpeg-strict 1"; C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp2v,'; C_CAP_BITRATE='vb=4096,'; C_CAP_FPS='fps=29.97,'; C_CAP_SAMPLERATE='samplerate=48000,'; C_CAP_ACODEC='acodec=a52,'; C_CAP_ABITRATE='ab=384,'; C_CAP_ACHANNELS='channels=2,'; CAP_EXT='.mpg'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=720,height=480,aspect=4:3}}' ;;
+		#121012 fixes for Flv output, higher audio bitrates, using mp3 audio
+		Flv,240p,4:3) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=300,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=240,aspect=4:3}}' ;;
+		Flv,240p,16:9) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=300,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=180,aspect=16:9}}' ;;
+		Flv,360p,4:3) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=600,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=480,height=360,aspect=4:3}}' ;;
+		Flv,360p,16:9) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=600,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=640,height=360,aspect=16:9}}' ;;
+		Flv,480p,4:3) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=800,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=640,height=480,aspect=4:3}}' ;;
+		Flv,480p,16:9) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=800,'; C_CAP_FPS='fps=29.97,'; C_CAP_ACODEC='acodec=mp3,'; C_CAP_ABITRATE='ab=128,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=853,height=480,aspect=16:9}}' ;;
+		Ipod,iPhone) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp4v,'; C_CAP_BITRATE='vb=768,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=92,'; CAP_EXT='.mp4'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=240}}' ;;
+		Ipod,iPhone,Wide) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=mp4v,'; C_CAP_BITRATE='vb=768,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=92,'; CAP_EXT='.mp4'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{width=320,height=180}}' ;;
+		#201012 added youtube formats
+		Youtube,360p) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=1000,'; C_CAP_FPS='fps=30,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=128,'; C_CAP_BITRATE='samplerate=48000,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=640,height=360,aspect=16:9}}' ;;
+		Youtube,480p) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=2500,'; C_CAP_FPS='fps=30,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=128,'; C_CAP_BITRATE='samplerate=48000,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=854,height=480,aspect=16:9}}' ;;
+		Youtube,720p) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=5000,'; C_CAP_FPS='fps=30,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=384,'; C_CAP_BITRATE='samplerate=48000,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=1280,height=720,aspect=16:9}}' ;;
+		Youtube,1080p) C_CAP_SCALE=''; C_CAP_VCODEC='vcodec=FLV1,'; C_CAP_BITRATE='vb=8000,'; C_CAP_FPS='fps=30,'; C_CAP_ACODEC='acodec=aac,'; C_CAP_ABITRATE='ab=384,'; C_CAP_BITRATE='samplerate=48000,'; CAP_EXT='.flv'; C_CAP_FORMAT=',vfilter={croppadd{}:canvas{no-padd,width=1920,height=1080,aspect=16:9}}' ;;
+		# others seem to use the following crop options as well... could include in above cmds..?
+		#PAL,4:3) croppadd{cropleft=31,cropright=31,croptop=16,cropbottom=16}
+		#PAL,4:3,crop) croppadd{cropleft=31,cropright=31,croptop=16,cropbottom=16}
+		#PAL,16:9) croppadd{cropleft=31,cropright=31,croptop=16,cropbottom=16}
+		#PAL,16:9,crop) croppadd{cropleft=31,cropright=31,croptop=16,cropbottom=16}
+		#NTSC,4:3) croppadd{cropleft=26,cropright=26,croptop=17,cropbottom=17}
+		#NTSC,4:3,crop) croppadd{cropleft=26,cropright=26,croptop=17,cropbottom=17}
+		#NTSC,16:9) croppadd{cropleft=30,cropright=30,croptop=17,cropbottom=17}
+		#NTSC,16:9,crop) croppadd{cropleft=30,cropright=30,croptop=17,cropbottom=17}
+		*) C_CAP_FORMAT='' ;;
+		esac
+	else
+		C_CAP_FORMAT=''
+	fi
+
+	#020912 added --logfile --ffmpeg-fast, plus custom CLI options from GUI
+	#121012 changes in logging, use -vvv output
+	if [ "$LOGFILE" != "" -a "$LOGFILE" != "/dev/null" ];then
+		[ ! -e "$LOGFILE" ] && touch "$LOGFILE"
+		#C="$C --file-logging --logmode text --syslog-facility user --log-verbose 2 --logfile $LOGFILE" #030912 updated logging options
+		C="$C -vvv"
+		echo "$APPNAME $APPVER: $LOGFILE
+$APPNAME Command type: $TYPE
+$APPNAME Options: $C
+" > "$LOGFILE"
+	else
+		C="$C"
+		[ -f "$LOGFILE" -a "$LOGFILE" != "/dev/null" ] && rm "$LOGFILE" &>/dev/null
+		LOGFILE="/dev/null" #121012 allow more verbose logging
+	fi
+
+}
+## end of functions
+
+# set font size
+set_gtkrc
+
+## get the devices before GUI loads up
+get_dvd 1>/dev/null
+get_cd  1>/dev/null
+
+## set debug or not
+##[ "$DEBUG" = "yes" ] && CL='xmessage' || CL='' #BK  #020912 do this in execute()
+
+#240912 fixes in immediate playback of $1
+{
+if [ "$PLAYFILE" = true ] && [ -f "$FILE" ];then
+	PLAYNOW=true # used to correct settings for vlc-gtk-osc
+	UPDATE_PLAYLIST=true #230213
+	play_file &
+	exit 0
+elif [ "$PLAYDIR" = true ] && [ -d "$DIR" ];then
+	PLAYNOW=true # used to correct settings for vlc-gtk-osc
+	UPDATE_PLAYLIST=true #230213
+	play_dir &
+	exit 0
+elif [ "$PLAYSTREAM" = true ] && [ "$STREAM_URL" != "" ];then  #110912
+	UPDATE_PLAYLIST=true #230213
+	PLAYNOW=true # used to correct settings for vlc-gtk-osc
+	play_url &
+	exit 0
+elif [ "$PLAYFILE" = true ] && [ ! -e "$FILE" ];then
+	# PLAYNOW should be disabled, and the main menu will be loaded with default options
+	export PLAYNOW=true
+	[ -f "$CONFIG" ] && . $CONFIG || FILE="Choose a file"
+elif [ "$PLAYDIR" = true ] && [ ! -d "$DIR" ];then
+	# PLAYNOW should be disabled, and the main menu will be loaded with default options
+	export PLAYNOW=true
+	[ -f "$CONFIG" ] && . $CONFIG || DIR="Choose a dir"
+fi
+
+}
+
+#270213 workdir set in write_config, which is run each time a file/dir/stream is played
+[ -d "$WORKDIR" ] && cd "$WORKDIR" || cd "$HOME"
+
+{  ## BUILD GUI
+
+# get all values stored in favourites, and put them into a combobox
+#040812 show last chosen fave stream at the top
+while read LINE
+do
+	if [ "${LINE%%|*}" != "$FAVE_STREAM" ];then # dont include $FAVE_STREAM in list yet
+	    FAVE_ITEMS="$FAVE_ITEMS
+<item>${LINE%%|*}</item>" #270712 show only fave names
+	fi
+done <"$FAVES"
+FAVE_ITEMS="$(echo "$FAVE_ITEMS" | sort)" #270712 sort favourite streams
+# now add the last chosen one to the top of the list
+if [ "$FAVE_STREAM" != "" ];then
+	#080812, only add FAVE_STREAM to top of list of it still exists in FAVES
+	[ "$(cat $FAVES | grep "${FAVE_STREAM}|")" != "" ] && FAVE_ITEMS="<item>$FAVE_STREAM</item>
+${FAVE_ITEMS}"
+fi
+
+# CROP combobox
+CROP_ARRAY=(None 16:10 16:9 1:1 221:100 4:3 5:4)
+CROP_ITEMS="<item>$CROP</item>"
+for i in "${CROP_ARRAY[@]}"
+do
+	if [ $i != "$CROP" ];then
+		CROP_ITEMS="$CROP_ITEMS<item>$i</item>"
+	fi
+done
+
+# ASPECT combobox
+ASPECT_ARRAY=(Default 16:10 16:9 1:1 221:100 4:3 5:4)
+ASPECT_ITEMS="<item>$ASPECT</item>"
+for i in "${ASPECT_ARRAY[@]}"
+do
+	if [ $i != "$ASPECT" ];then
+		ASPECT_ITEMS="$ASPECT_ITEMS<item>$i</item>"
+	fi
+done
+
+# VIDEO OUT combobox
+VOUT_ARRAY=(Default XVideo X11 SDL GLX SVGAlib) #BK
+#131012 disable Xvideo output if using vesa xorg module or Xvesa server, replace with X11 output
+[ "$VOUT" = "XVideo" -a "`readlink $(which X) 2>/dev/null`" = "Xvesa" ] && VOUT_ITEMS="<item>X11</item>" || VOUT_ITEMS="<item>$VOUT</item>"
+[ "$VOUT" = "XVideo" -a -f /etc/X11/xorg.conf ] && [ "`grep 'card0driver' /etc/X11/xorg.conf | grep '"vesa"'`" != "" ] && VOUT_ITEMS="<item>X11</item>" || VOUT_ITEMS="<item>$VOUT</item>"
+for i in "${VOUT_ARRAY[@]}"
+do
+	if [ $i != "$VOUT" ];then
+		VOUT_ITEMS="$VOUT_ITEMS<item>$i</item>"
+	fi
+done
+
+# VOL combobox
+VOL_ARRAY=(Off 1 2 3 4 5 6 7 8 9 10)
+VOL_ITEMS="<item>$VOL</item>"
+for i in "${VOL_ARRAY[@]}"
+do
+	if [ $i != "$VOL" ];then
+		VOL_ITEMS="$VOL_ITEMS<item>$i</item>"
+	fi
+done
+
+#020912 EQUALIZER combobox
+EQUALIZER_ARRAY=(flat classical club dance fullbass fullbasstreble fulltreble headphones largehall live party pop reggae rock ska soft softrock techno)
+EQUALIZER_ITEMS="<item>$EQUALIZER</item>"
+for i in "${EQUALIZER_ARRAY[@]}"
+do
+	if [ $i != "$EQUALIZER" ];then
+		EQUALIZER_ITEMS="$EQUALIZER_ITEMS<item>$i</item>"
+	fi
+done
+
+# DOLBY combobox
+DOLBY_ARRAY=(Auto On Off)
+DOLBY_ITEMS="<item>$DOLBY</item>"
+for i in "${DOLBY_ARRAY[@]}"
+do
+	if [ $i != "$DOLBY" ];then
+		DOLBY_ITEMS="$DOLBY_ITEMS<item>$i</item>"
+	fi
+done
+
+# OSD_FONT_SIZE combobox
+OSD_FONT_SIZE_ARRAY=("Default" "Tiny" "Smaller" "Small" "Normal" "Large" "Larger" "Huge")
+OSD_FONT_SIZE_ITEMS="<item>$OSD_FONT_SIZE</item>"
+for i in "${OSD_FONT_SIZE_ARRAY[@]}"
+do
+	if [ $i != "$OSD_FONT_SIZE" ];then
+		OSD_FONT_SIZE_ITEMS="$OSD_FONT_SIZE_ITEMS<item>$i</item>"
+	fi
+done
+
+# OSD_FX combobox
+OSD_FX_ARRAY=("Default" "Background" "Outline" "Fat-Outline")
+OSD_FX_ITEMS="<item>$OSD_FX</item>"
+for i in "${OSD_FX_ARRAY[@]}"
+do
+	if [ $i != "$OSD_FX" ];then
+		OSD_FX_ITEMS="$OSD_FX_ITEMS<item>$i</item>"
+	fi
+done
+
+# OSD_POS combobox
+OSD_POS_ARRAY=("Center" "Top" "Bottom" "Left" "Right" "Top-Left" "Top-Right" "Bottom-Left" "Bottom-Right")
+OSD_POS_ITEMS="<item>$OSD_POS</item>"
+for i in "${OSD_POS_ARRAY[@]}"
+do
+	if [ $i != "$OSD_POS" ];then
+		OSD_POS_ITEMS="$OSD_POS_ITEMS<item>$i</item>"
+	fi
+done
+
+#240912 youtube, ipv4
+IPV46_ARRAY=(Any ipv4 ipv6)
+IPV46_ITEMS="<item>$IPV46</item>"
+for i in "${IPV46_ARRAY[@]}"
+do
+	if [ $i != "$IPV46" ];then
+		IPV46_ITEMS="$IPV46_ITEMS<item>$i</item>"
+	fi
+done
+YOUTUBE_ARRAY=(240p 360p 480p 720p)
+YOUTUBE_ITEMS="<item>$YOUTUBE</item>"
+for i in "${YOUTUBE_ARRAY[@]}"
+do
+	if [ $i != "$YOUTUBE" ];then
+		YOUTUBE_ITEMS="$YOUTUBE_ITEMS<item>$i</item>"
+	fi
+done
+#231212 sopcast
+SOPCAST_PORT_ARRAY=(8902 8901 8906)
+SOPCAST_PORT_ITEMS="<item>$SOPCAST_PORT</item>"
+for i in "${SOPCAST_PORT_ARRAY[@]}"
+do
+	if [ $i != "$SOPCAST_PORT" ];then
+		SOPCAST_PORT_ITEMS="$SOPCAST_PORT_ITEMS<item>$i</item>"
+	fi
+done
+#041012 capture settings below, down to CAP_BITRATE #061012 added more options
+CAP_VCODEC_ARRAY=(SAME NONE mp1v mp2v mp4v DIV1 DIV2 DIV3 DVDv WMV1 WMV2 H236 H264 theo FLV1 MSVC MRLE FLIC QPEG VP8)
+CAP_VCODEC_ITEMS="<item>$CAP_VCODEC</item>"
+for i in "${CAP_VCODEC_ARRAY[@]}"
+do
+	if [ $i != "$CAP_VCODEC" ];then
+		CAP_VCODEC_ITEMS="$CAP_VCODEC_ITEMS<item>$i</item>"
+	fi
+done
+#061012 added more options
+CAP_ACODEC_ARRAY=(SAME NONE mpga mp2a mp3 mp4a a52 aac vorb s16l s24l s32l spx flac)
+CAP_ACODEC_ITEMS="<item>$CAP_ACODEC</item>"
+for i in "${CAP_ACODEC_ARRAY[@]}"
+do
+	if [ $i != "$CAP_ACODEC" ];then
+		CAP_ACODEC_ITEMS="$CAP_ACODEC_ITEMS<item>$i</item>"
+	fi
+done
+
+CAP_SCALE_ARRAY=(SAME 0.25 0.30 0.40 0.50 0.60 0.75 0.80 0.90 1.00)
+CAP_SCALE_ITEMS="<item>$CAP_SCALE</item>"
+for i in "${CAP_SCALE_ARRAY[@]}"
+do
+	if [ $i != "$CAP_SCALE" ];then
+		CAP_SCALE_ITEMS="$CAP_SCALE_ITEMS<item>$i</item>"
+	fi
+done
+
+CAP_BITRATE_ARRAY=(SAME 32 64 128 192 256 512 800 1024 2048 4096)
+CAP_BITRATE_ITEMS="<item>$CAP_BITRATE</item>"
+for i in "${CAP_BITRATE_ARRAY[@]}"
+do
+	if [ $i != "$CAP_BITRATE" ];then
+		CAP_BITRATE_ITEMS="$CAP_BITRATE_ITEMS<item>$i</item>"
+	fi
+done
+
+#061012 audio bitrates
+CAP_ABITRATE_ARRAY=(SAME 64 96 128 192 224 256 384 512 1024 2048 4096)
+CAP_ABITRATE_ITEMS="<item>$CAP_ABITRATE</item>"
+for i in "${CAP_ABITRATE_ARRAY[@]}"
+do
+	if [ $i != "$CAP_ABITRATE" ];then
+		CAP_ABITRATE_ITEMS="$CAP_ABITRATE_ITEMS<item>$i</item>"
+	fi
+done
+
+#061012 audio channels
+CAP_ACHANNELS_ARRAY=(SAME 0 1 2 3 4)
+CAP_ACHANNELS_ITEMS="<item>$CAP_ACHANNELS</item>"
+for i in "${CAP_ACHANNELS_ARRAY[@]}"
+do
+	if [ $i != "$CAP_ACHANNELS" ];then
+		CAP_ACHANNELS_ITEMS="$CAP_ACHANNELS_ITEMS<item>$i</item>"
+	fi
+done
+
+#061012 audio sample rate
+CAP_SAMPLERATE_ARRAY=(SAME 48000 44100 22050 11025 5512 )
+CAP_SAMPLERATE_ITEMS="<item>$CAP_SAMPLERATE</item>"
+for i in "${CAP_SAMPLERATE_ARRAY[@]}"
+do
+	if [ $i != "$CAP_SAMPLERATE" ];then
+		CAP_SAMPLERATE_ITEMS="$CAP_SAMPLERATE_ITEMS<item>$i</item>"
+	fi
+done
+
+#171012 transcode formats #181012 added more options #201012 added DVD, Youtube stuff to list
+CAP_FORMAT_ARRAY=('Default' 'PAL,4:3' 'PAL,4:3,crop' 'PAL,4:3,stretch' 'NTSC,4:3' 'NTSC,4:3,crop' 'NTSC,4:3,stretch' 'PAL,16:9' 'PAL,16:9,crop' 'PAL,16:9,stretch' 'NTSC,16:9' 'NTSC,16:9,crop' 'NTSC,16:9,stretch' 'Ipod,iPhone' 'Ipod,iPhone,Wide' 'BBCurve' 'BBCurve,Wide' 'DVD,PAL,LQ,4:3' 'DVD,PAL,HQ,4:3' 'DVD,NTSC,LQ,4:3' 'DVD,NTSC,HQ,4:3' 'Flv,240p,4:3' 'Flv,240p,16:9' 'Flv,360p,4:3' 'Flv,360p,16:9' 'Flv,480p,4:3' 'Flv,480p,16:9' 'Youtube,360p' 'Youtube,480p' 'Youtube,720p' 'Youtube,1080p')
+CAP_FORMAT_ITEMS="<item>$CAP_FORMAT</item>"
+for i in "${CAP_FORMAT_ARRAY[@]}"
+do
+	if [ $i != "$CAP_FORMAT" ];then
+		CAP_FORMAT_ITEMS="$CAP_FORMAT_ITEMS<item>$i</item>"
+	fi
+done
+
+} ## end build gui items
+
+# enable joypad controls
+[ -x /usr/bin/rejoystickcc ] && /usr/bin/rejoystickcc --load --profile vlc
+
+# OUTPUT GUI
+{
+#230213 moved out of main GUI
+CAPTURE_GUI='<frame>
+	<hbox homogeneous="true">
+		<radiobutton tooltip-text="Use a video or audio file as the capture input, to convert it to the settings chosen below">
+			<label>   File   </label>
+			<variable>CAP_TYPE_FILE</variable>
+			<default>"'$CAP_TYPE_FILE'"</default>
+			<action>enable:CAP_OUTPUT</action>
+			<action>disable:CAP_SCREEN_CACHE</action>
+			<action>disable:CAP_SCREEN_FOLLOWMOUSE</action>
+		</radiobutton>
+		<radiobutton tooltip-text="Use a directory as the capture input, to convert all files in that directory to the settings chosen below">
+			<label>   Dir   </label>
+			<variable>CAP_TYPE_DIR</variable>
+			<default>"'$CAP_TYPE_DIR'"</default>
+			<action>enable:CAP_BTN</action>
+			<action>disable:CAP_OUTPUT</action>
+			<action>disable:CAP_SCREEN_CACHE</action>
+			<action>disable:CAP_SCREEN_FOLLOWMOUSE</action>
+		</radiobutton>
+		## 210213 added urls to capture options
+		<radiobutton tooltip-text="Use Stream URL in the Streams tab as capture input, convert using settings below">
+			<label>   URL   </label>
+			<variable>CAP_TYPE_URL</variable>
+			<default>"'$CAP_TYPE_URL'"</default>
+			<action>enable:CAP_OUTPUT</action>
+			<action>disable:CAP_SCREEN_CACHE</action>
+			<action>disable:CAP_SCREEN_FOLLOWMOUSE</action>
+		</radiobutton>
+		<radiobutton tooltip-text="Use a DVD as the capture input, to convert the DVD Video to a file, using the settings below">
+			<label>   DVD   </label>
+			<variable>CAP_TYPE_DVD</variable>
+			<default>"'$CAP_TYPE_DVD'"</default>
+			<action>enable:CAP_OUTPUT</action>
+			<action>disable:CAP_SCREEN_CACHE</action>
+			<action>disable:CAP_SCREEN_FOLLOWMOUSE</action>
+		</radiobutton>
+		<radiobutton tooltip-text="Use screen:// file as the capture input, to record a video of your desktop (screegrab or screencast)">
+			<label>   Screen   </label>
+			<variable>CAP_TYPE_SCREEN</variable>
+			<default>"'$CAP_TYPE_SCREEN'"</default>
+			<action>enable:CAP_OUTPUT</action>
+			<action>enable:CAP_SCREEN_CACHE</action>
+			<action>enable:CAP_SCREEN_FOLLOWMOUSE</action>
+		</radiobutton>
+		<radiobutton>
+			<label>   V4l   </label>
+			<variable>CAP_TYPE_V4L</variable>
+			<default>"'$CAP_TYPE_V4L'"</default>
+			<action>enable:CAP_OUTPUT</action>
+			<action>disable:CAP_SCREEN_CACHE</action>
+			<action>disable:CAP_SCREEN_FOLLOWMOUSE</action>
+			<visible>disabled</visible>
+		</radiobutton>
+	</hbox>
+
+	<text height-request="5"><label>""</label></text>
+	<hbox>
+		<text><label>"Video:"</label></text>
+		<combobox tooltip-text="Choose a video codec, choose NONE if you only want audio. If you choose SAME, you will need to supply the filetype extensions yourself, in the Output entry."  width-request="85">
+			<variable>CAP_VCODEC</variable>
+			'$CAP_VCODEC_ITEMS'
+		</combobox>
+		<text><label>"VBR:"</label></text>
+		<combobox tooltip-text="video bitrate, higher is better quality"  width-request="80">
+			<variable>CAP_BITRATE</variable>
+			'$CAP_BITRATE_ITEMS'
+		</combobox>
+		<text><label>"Scale:"</label></text>
+		<combobox tooltip-text="scale of the video" width-request="80">
+			<variable>CAP_SCALE</variable>
+			'$CAP_SCALE_ITEMS'
+		</combobox>
+		<checkbox tooltip-text="De-interlacing willl make interlaced video look better">
+			<label>" Deinterlace  "</label>
+			<variable>CAP_DEINT</variable>
+			<default>"'$CAP_DEINT'"</default>
+		</checkbox>
+	</hbox>
+
+	<hbox>
+		<text><label>"Audio:"</label></text>
+		<combobox tooltip-text="Choose an audio codec, choose NONE if you only want video." width-request="85">
+			<variable>CAP_ACODEC</variable>
+			'$CAP_ACODEC_ITEMS'
+		</combobox>
+		<text><label>"ABR:"</label></text>
+		<combobox tooltip-text="audio bitrate, higher is better quality"  width-request="80">
+			<variable>CAP_ABITRATE</variable>
+			'$CAP_ABITRATE_ITEMS'
+		</combobox>
+		<text><label>" Chnl:"</label></text>
+		<combobox tooltip-text="the number of audio channels"  width-request="80">
+			<variable>CAP_ACHANNELS</variable>
+			'$CAP_ACHANNELS_ITEMS'
+		</combobox>
+		<text><label>" SR:"</label></text>
+		<combobox tooltip-text="the sample rate of the audio, higher is better quality"  width-request="80">
+			<variable>CAP_SAMPLERATE</variable>
+			'$CAP_SAMPLERATE_ITEMS'
+		</combobox>
+	</hbox>
+
+	<hbox>
+		##201012 updated to accept start and stop times
+		<text><label>"Times: "</label></text>
+		<entry tooltip-text="Capture only between the START and STOP times, in seconds.
+
+The format is START-STOP. The separator must be a dash (-).
+If only one number given, it is used as the STOP time.
+Leave this option blank to ignore it completely.
+
+Examples:
+30: captures the first 30 seconds only.
+0-90: captures the first 90 seconds of input.
+30-60: capture starts at 30 seconds into input, stops at 60.">
+			<variable>CAP_DURATION</variable>
+			<input>echo '${CAP_DURATION}'</input>
+		</entry>
+		<text><label>"  FPS:"</label></text>
+		<entry tooltip-text="The FPS of the output, and of the screen capture, leave blank to ignore">
+			<variable>CAP_FPS</variable>
+			<input>echo '${CAP_FPS}'</input>
+		</entry>
+		<text><label>"Cache:"</label></text>
+		<entry tooltip-text="The cache size in milliseconds of the screen capture">
+			<variable>CAP_SCREEN_CACHE</variable>
+			<input>echo '${CAP_SCREEN_CACHE:-1000}'</input>'
+				[ "$CAP_TYPE_SCREEN" != true ] && CAPTURE_GUI=${CAPTURE_GUI}'<visible>disabled</visible>'
+				CAPTURE_GUI=${CAPTURE_GUI}'</entry>
+		<checkbox tooltip-text="If ticked, the video will follow the mouse cursor round the screen">
+			<label>Follow cursor</label>
+			<variable>CAP_SCREEN_FOLLOWMOUSE</variable>
+			<default>"'$CAP_SCREEN_FOLLOWMOUSE'"</default>'
+				[ "$CAP_TYPE_SCREEN" != true ] && CAPTURE_GUI=${CAPTURE_GUI}'<visible>disabled</visible>'
+				CAPTURE_GUI=${CAPTURE_GUI}'</checkbox>
+	</hbox>
+
+	<hbox>
+		<text><label>"Format"</label></text>
+		##171012 added CAP_FORMAT, uses vfilter and canvas to  set size, resolution, aspepct, crop, etc
+		<combobox tooltip-text="The video resolution, aspect ratio, crop and format, settings. NOTE: this option may also override other settings, such as Scale, Video, VBR, Audio, ABR and FPS" width-request="130">
+			<variable>CAP_FORMAT</variable>
+			'$CAP_FORMAT_ITEMS'
+		</combobox>
+		<text><label>"Adv:"</label></text>
+		<entry tooltip-text="Add your own transcoding options. Examples:
+
+vfilter={croppadd{cropttop=30,cropbottom=30}:canvas{height=480,width=360}}
+
+vfilter={croppadd{}:canvas{height=800,width=450:aspect=16:9}}
+
+Or add your transcode options to the Cmd-line entry, in the Expert tab, use the format --sout-transcode-*, and --sout-ffmpeg-keyint 16 --sout-ffmpeg-strict-rc, etc">
+			<variable>CAP_ADV</variable>
+			<input>echo "'$CAP_ADV'"</input>
+		</entry>
+		<text><label>"Save:"</label></text>
+		##171012 added workdir info ##270213 now SAVEDIR info
+		<entry width-request="115" tooltip-text="Choose the file to save to.  NOTE: No file extension is needed if a video or audio codec is set. If not, you need to add the file extension yourself! If you give only a filename, no path, the file will be saved in '"${SAVEDIR}"'">
+			<variable>CAP_OUTPUT</variable>
+			<input>echo "'${CAP_OUTPUT:-filename}'"</input>
+			<action>enable:CAP_BTN</action>'
+				#071012 fixes for DIR capture
+				[ "$CAP_TYPE_DIR" = true ] && CAPTURE_GUI=${CAPTURE_GUI}'<visible>disabled</visible>'
+				CAPTURE_GUI=${CAPTURE_GUI}'</entry>
+		<button relief="2" tooltip-text="Capture the given input to a file, in this folder: '$SAVEDIR'">
+			<variable>CAP_BTN</variable>
+			<input file stock="gtk-media-record"></input>
+			<action> if [ "$CAP_TYPE_DIR" = false ];then [ "$CAP_OUTPUT" = "filename" ] && Xdialog --title "$APPNAME $APPVER" --msgbox "You need to choose a filename for your new output file." 0 0 || capture & else capture & fi</action>'
+				#071012 fixes for DIR capture
+				[ "$CAP_TYPE_DIR" = true ] && CAPTURE_GUI=${CAPTURE_GUI}'<visible>disabled</visible>'
+				CAPTURE_GUI=${CAPTURE_GUI}'</button>
+	</hbox>
+</frame>'
+export CAPTURE_GUI="`echo "$CAPTURE_GUI" | sed -e 's/##.*//'`" #allow comments in GUI xml code
+}
+{
+export VLCGTKGUI='
+<window icon-name="vlc" title="'$APPNAME' '$APPVER'" resizable="true" width-request="520">
+	<vbox>
+		<hbox>
+			<text><label>"VideoLAN Player '$VLC_VER'"</label></text>
+		</hbox>
+
+		<notebook labels="File/Disc|Playlists|Streams|Capture|Controls|Help" enable-popup="true" page="'$TAB'" homogeneous="true">
+			<frame>
+				<text><label>Choose a file or playlist</label></text>
+				<hbox>
+					<button relief="2" tooltip-text="Choose a file or playlist to play">
+						<input file stock="gtk-open"></input>
+						<action type="fileselect">FILE</action>
+					</button>
+					<entry>
+						<variable>FILE</variable>
+						<input>echo "'${FILE}'"</input>
+						<action>enable:FILE_BTN</action>
+					</entry>
+					<button relief="1" tooltip-text="Play the selected file or playlist (.m3u)">
+						<label>Play file </label>
+						<input file stock="gtk-media-play"></input>
+						<action>UPDATE_PLAYLIST=true play_file &</action>'
+						# add disabled if needed
+						[ ! -e "$FILE" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'
+							<variable>FILE_BTN</variable>
+							</button>
+				</hbox>
+				<vbox>
+					<text height-request="10"><label>""</label></text>
+					<text><label>Play disc from drive:</label></text>
+					<text height-request="10"><label>""</label></text>
+				</vbox>
+				<hbox homogeneous="true">
+					<button relief="1" width-request="110">
+						<label>DVD</label>
+						<input file stock="gtk-media-play"></input>
+						<action>play_dvd &</action>
+					</button>
+					<button relief="1" width-request="110" tooltip-text="Play DVD, skip all menus, go straight to video">
+						<label>DVD Simple</label>
+						<input file stock="gtk-media-play"></input>
+						<action>play_dvdsimple &</action>
+					</button>
+					<button relief="1" width-request="110">
+						<label>VCD</label>
+						<input file stock="gtk-media-play"></input>
+						<action>play_vcd</action>
+					</button>
+					<button relief="1" width-request="110">
+						<label>Audio CD</label>
+						<input file stock="gtk-media-play"></input>
+						<action>play_audiocd</action>
+					</button>
+				</hbox>
+			</frame>
+
+			<frame>
+				<text><label>Choose a directory</label></text>
+				<hbox>
+						<button relief="2" tooltip-text="Choose a directory to play all files inside it">
+							<input file stock="gtk-open"></input>
+							<action type="fileselect">DIR</action>
+						</button>
+						<entry accept="directory">
+							<variable>DIR</variable>
+							<action>enable:PLAYLIST_BTN</action>
+							<action>enable:PLAYLIST_DIR_BTN</action>
+							<action>enable:PLAYLIST_DIR</action>
+							<input>echo "'$DIR'"</input>
+						</entry>
+						<button relief="1" tooltip-text="Play all files in this directory">'
+						# add disabled if needed
+						[ ! -d "$DIR" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<label>Play dir  </label>
+							<input file stock="gtk-media-play"></input>
+							<action>UPDATE_PLAYLIST=true play_dir &</action>
+							<variable>PLAYLIST_BTN</variable>
+						</button>
+				</hbox>
+				<vbox>
+					<text height-request="15"><label>""</label></text>
+					<text><label>Save as playlist:</label></text>
+				</vbox>
+				<hbox>
+					<button relief="2" tooltip-text="Choose the folder where you will save your playlist">
+						<variable>PLAYLIST_DIR_BTN</variable>
+						<input file stock="gtk-open"></input>
+						<action>enable:PLAYLIST_DIR</action>
+						<action type="fileselect">PLAYLIST_DIR</action>'
+						# add disabled if needed
+						[ ! -d "$DIR" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'
+					</button>
+					<entry accept="directory" tooltip-text="This is the folder where you will save your playlist">
+						<action>enable:PLAYLIST</action>
+						<variable>PLAYLIST_DIR</variable>'
+						# add disabled if needed
+						[ ! -d "$DIR" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<input>echo "'$PLAYLIST_DIR'"</input>
+					</entry>
+					<text><label>/</label></text>
+					<entry tooltip-text="This is the filename of your new playlist, m3u file extension is best">
+						<variable>PLAYLIST</variable>
+						<action>enable:SAVE_PLAYLIST</action>
+						<action>enable:AUDIOPL</action>
+						<action>enable:VIDEOPL</action>'
+						# add disabled if needed
+						[ ! -d "$DIR" ] || [ ! -d "$PLAYLIST_DIR" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<input>echo type filename</input>
+					</entry>
+  					<button relief="2" tooltip-text="Click here to save the playlist. You can then play the playlist with the Play File button.">
+						<variable>SAVE_PLAYLIST</variable>
+						<input file stock="gtk-save"></input>
+						<action>save_playlist &</action>'  #240213 no need to not update playlists
+						# add disabled if needed
+						[ ! -d "$DIR" ] || [ ! -d "$PLAYLIST_DIR" ] || [ ! "$PLAYLIST" ]  && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'</button>
+				</hbox>
+				<hbox>
+					<checkbox tooltip-text="Include ONLY audio files in the playlist">
+						<label>Audio only</label>
+						<variable>AUDIOPL</variable>'
+						# add disabled if needed
+						[ ! -d "$DIR" ] || [ ! -d "$PLAYLIST_DIR" ] || [ ! "$PLAYLIST" ]  && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<action>if true disable:VIDEOPL</action>
+						<action>if false enable:VIDEOPL</action>
+						<default>false</default>
+					</checkbox>
+					<checkbox tooltip-text=" Include ONLY video files in the playlist">
+						<label>Video only</label>
+						<variable>VIDEOPL</variable>'
+						# add disabled if needed
+						[ ! -d "$DIR" ] || [ ! -d "$PLAYLIST_DIR" ] || [ ! "$PLAYLIST" ]  && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<action>if true disable:AUDIOPL</action>
+						<action>if false enable:AUDIOPL</action>
+						<default>false</default>
+					</checkbox>
+				</hbox>
+			</frame>
+
+			<frame>
+				<text><label>Manage your online streams</label></text>
+				<hbox>
+				<text><label>Stream URL:</label></text>
+					<entry tooltip-text="Enter any stream URL, Youtube URL, SopCast URL, or any rtmpdump command">
+						<variable>STREAM_URL</variable>
+						<input>echo "'${STREAM_URL##*|}'"</input>
+						<action>enable:SAVE_STREAM</action>
+						<action>enable:STREAM_BTN</action>
+					</entry>
+					<button relief="1" tooltip-text="Play the chosen URL or rtmpdump command">
+						<variable>STREAM_BTN</variable>
+						<label>Play URL</label>
+						<input file stock="gtk-media-play"></input>
+						<action>[ "$SAVE_STREAM" = true ] && write_fave</action>
+						##231212 dont try to play empty URLs
+						<action>[ "$SAVE_STREAM" != true -a "$STREAM_URL" != "" ] && play_url || Xdialog --title "'$APPNAME'" --msgbox "Not a valid URL." 0 0</action>' #080812 play or write stream, depending
+						# add disabled if needed
+						[ "$STREAM_URL" = "http://" -o "$STREAM_URL" = "" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'</button>
+				</hbox>
+				<hbox>
+					<checkbox tooltip-text="Save this stream URL as a favourite. You can choose a nice name for it.">
+						<label>Add to favourites (tick before playing)</label>
+						<variable>SAVE_STREAM</variable>'
+						# add disabled if needed
+						[ "$STREAM_URL" = "http://" -o "$STREAM_URL" = "" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<default>"'$SAVE_STREAM'"</default>
+					</checkbox>
+				</hbox>
+
+				<text><label>""</label></text>
+				<hbox>
+					<text><label>Favourites:</label></text>
+					<combobox tooltip-text="Choose your favourite internet media stream. You can also copy & paste a stream URL here to play or record it." width-request="275">
+						<variable>FAVE_STREAM_URL</variable>
+						'$FAVE_ITEMS'
+					</combobox>
+					<button relief="2" tooltip-text="Play selected favourite or URL now">
+						<input file stock="gtk-media-play"></input>
+						<action>play_fave &</action>
+					</button>
+					##171012 added workdir info ##270213 now save dir
+					<button relief="2" tooltip-text="Record the selected stream or URL to a file. The file will be saved in '"${SAVEDIR}"'">
+						<input file stock="gtk-media-record"></input>
+						<action>record_fave &; PID=$!</action>
+					</button>
+					##100913 added info button for streams
+					<button relief="2" tooltip-text="View stream details">
+						<input file stock="gtk-info"></input>
+						<action>if [ "$FAVE_STREAM_URL" != "" ]; then show_stream_info; fi; </action>
+					</button>
+					<button relief="2" tooltip-text="Delete selected favourite from the list">
+						<input file stock="gtk-delete"></input>
+						<action>if [ "$FAVE_STREAM_URL" != "" ]; then delete_fave; fi</action>
+					</button>
+				</hbox>
+
+				##231212 update sopcast channels in $FAVES
+				<hbox>
+					<button relief="2" tooltip-text="Add the latest sopcast channels to your favourite streams (above)">
+						<variable>SOPCAST_BTN</variable>
+						<label>SopCast</label>
+						<input file stock="gtk-refresh"></input>
+						<action>SOPLIST="$(get_sopcasts)"; TMP="`cat "$FAVES" | grep -v ^SopCast:`"; echo "$TMP" > /tmp/file; echo "$SOPLIST" >> /tmp/file; sort /tmp/file > "$FAVES"; rm /tmp/file; </action>
+						<action>$SELF --tab 2 &</action>
+						<action type="exit">SOP_EXIT</action>'
+						# add disabled if needed
+						[ "`which $SOPCASTBIN 2>/dev/null`" = "" ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'</button>
+				</hbox>
+			</frame>
+
+			'${CAPTURE_GUI}'
+
+
+			<frame>
+				<vbox>
+					<checkbox tooltip-text="Tick this box to disable the on-screen GUI buttons which can control video playback. If on-screen controls are disabled, you can control the video playback using the VLC keyboard shortcuts below.">
+						<label>Disable the '$APPNAME' on-screen controls (OSC) during playback</label>'
+							[ "`which xdotool`" = "" ] && export DISABLE_OSC=true && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>' #121012 if no xdotool, disable OSC, which needs it
+							VLCGTKGUI=${VLCGTKGUI}'
+						<default>"'$DISABLE_OSC'"</default>
+						<variable>DISABLE_OSC</variable>
+					</checkbox>
+					<edit indent="20" editable="false">
+						<variable>EDITOR</variable>
+						<width>350</width><height>150</height>
+						<default>"
+	Video Controls:
+
+		space			Play/Pause
+		ctrl+left		Skip backward (medium)
+		ctrl+right		Skip forward (medium)
+		shift+left		Skip backward (small)
+		shift+right		Skip forward (small)
+
+		t 				Show Position
+		n 				Next Item
+		p 				Previous Item
+		s  				Stop
+
+		f/dble-click		Toggle Fullscreen
+		a 				Aspect Ratio
+		c 				Crop
+		k 				Toggle Subtitles
+
+		ctrl+up			Volume up
+		ctrl+down		Volume down
+		m 				Mute
+		b 				Cycle through available Audio Tracks
+
+		[  				Decrease playback speed by 10%
+		]  				Increase playback speed by 10%
+
+		+  				Play faster
+		-  				Play Slower
+
+		ctrl+h			Decrease audio delay -50ms
+		ctrl+j			Increase audio delay +50ms
+		ctrl+k			Decrease subtitle delay -50ms
+		ctrl+l			Increase subtitle delay +50ms
+
+		ctrl+q			Quit
+
+	   Music Controls (type into VLC console)
+
+		pause			Pause playback
+		next			Play next item
+		prev			Play previous item
+		stop				Stop playback
+		volup			Volume up
+		voldown			Volume down
+		help				More options
+
+	  Type the following in the terminal for the GUI options:
+
+	  '$SELF' --help
+"</default>
+					</edit>
+				</vbox>
+			</frame>
+			<frame>
+				<vbox>
+					<edit indent="20" editable="false">
+						<width>350</width><height>175</height>
+						<variable>VLC_HELP_TXT</variable>
+						<default>"					'$APPNAME' '$APPVER',   by sc0ttman
+		http://murga-linux.com/puppy/viewtopic.php?t=54753
+
+  Thanks to zigbert, trio, SFR, amigo, technosaurus, keniv, dejan555
+
+  '$APPNAME' '$APPVER' is only a frontend - VLC is the actual media player.
+
+You can use '$APPNAME' to do most things that you would normally expect
+from a simple, basic function, graphical media player interface.
+
+	1. The main GUI:
+
+This is the main menu.
+Choose from tabs File/Disc, Playlists, Streams or Capture.
+
+The File/Disc tab lets you play files and DVD, CDs, VCDs, etc.
+The Playlists tab can play whole directories, create playlists, etc.
+You can also play playlist files (.m3u etc) in the File or Playlist tab.
+The Streams tab lets you play or record many internet streams.
+The Capture tab can capture, recode and convert many sources.
+
+The Stream tab:
+
+The record stream button accepts favourites from the list, as well
+as any other stream URLs, like Youtube and SopCast URLs.
+
+Note: SopCast streams require the sp-sc binary to be installed.
+It can also be installed as sp-auth-sc, or sp-auth and it will work fine.
+
+You can also enter any rtmpdump commands that output to stdout,
+in either the Play URL or Favourite stream input fields.
+
+Playback and recording of Youtube URLs requires your VLC player
+to include support for lua plugins.
+
+The Capture tab:
+
+This is where you can convert, transcode various inputs,
+including files, DVDs, screen capture and more.
+
+Click on a source at the top to use it.
+The File source converts the selected file in the File/Disc tab.
+The Dir source converts the selected folder in the Playlists tab.
+The URL source converts the current URL in the Streams tab.
+..and so on.
+
+Use the Dir source to batch convert all files in a directory.
+Use the DVD source to rip a DVD to the chosen video format.
+Use the Screen source to capture a screen cast of the desktop.
+
+There are various input sources, and many options to set for
+saving or converting the input, including many presets, which
+will override some of the other settings.
+
+The Capture tab essentially allows you to convert any input, such as
+a file or stream, so you can save it in your chosen file type/format.
+
+This includes saving a YouTube URL straight to mp3, for example.
+
+	The On Sceen Controls:
+
+The on screen controls (OSC) will popup when playback starts. If this
+doesnt happen, click the OSC button at the bottom of the main menu.
+
+You get different OSC layouts for audio, file and stream playback.
+
+The OSC can be disabled, under the Controls tab, if desired.
+
+The video OSC has different controls for files, dirs and streams. If
+playing a file or dir, you have the normal Play/Stop/Prev/Next btns.
+If playing a stream, you can choose to play or record any stream in
+your favourites.
+
+The audio OSC (aka Audio Playlist) is very basic. You can click on an
+item to play it, thats it. When that item finished, the next one will start.
+
+Its not recommended to use '$APPNAME' as both video and audio
+player at the same time - you might get the wrong on screen controls.
+
+To see the command line options supported by this '$APPNAME' script,
+type the folowing into a terminal and hit ENTER:
+
+	'$SELF' --help
+
+For the full list of VLC options, type this in a terminal and hit ENTER:
+
+	vlc -H
+
+That will show you all possible options that can be set by this frontend.
+
+						"</default>
+					</edit>
+				</vbox>
+			</frame>
+		</notebook>
+
+		<notebook labels="Main|Audio|Video|Subs|OSD|Network|Expert" enable-popup="true" page="0" tab-pos="2" homogeneous="true">
+			<frame>
+				<hbox>
+					<vbox>
+						<button relief="1" tooltip-text="Select your default DVD and CD device" width-request="100">
+							<label>Devices</label>
+							<input file stock="gtk-cdrom"></input>
+							<action>cdburner-wizard</action>
+							<action>execute;</action> ##270913
+						</button>
+						<button relief="1" tooltip-text="Eject your default CD or DVD device" width-request="100">
+							<label>Eject</label>
+							<input file stock="gtk-cdrom"></input>
+							<action>eject -T</action>
+						</button>
+					</vbox>
+					<vbox width-request="350">
+						<hbox>
+							<checkbox tooltip-text="Randomise the order of playback">
+								<label>Shuffle</label>
+								<variable>SHUFFLE</variable>
+								<default>"'$SHUFFLE'"</default>
+							</checkbox>
+							<checkbox tooltip-text="Loop through all files repeatedly">
+								<label>Loop</label>
+								<variable>LOOP</variable>
+								<default>"'$LOOP'"</default>
+							</checkbox>
+							<checkbox tooltip-text="Stop playback after each file is done playing.">
+								<label>Play and Stop</label>
+								<variable>PLAY_STOP</variable>
+								<default>"'$PLAY_STOP'"</default>
+							</checkbox>
+						</hbox>
+						##231212 now user can set workdir ##270213 save dir
+						<hbox>
+							<text use-markup="true"><label>"Save in <b>'"${SAVEDIR##*/}"'</b>"</label></text>
+							<button tooltip-text="Choose a folder where '$APPNAME' can save streams, etc">
+								<input file stock="gtk-directory"></input>
+								<action>set_savedir &</action>
+							</button>
+						</hbox>
+					</vbox>
+				</hbox>
+			</frame>
+
+			<frame>
+				<vbox>
+					<hbox>
+						<checkbox tooltip-text="Enable audio during playback">
+							<label>Enable audio</label>
+							<variable>AUDIO</variable>
+							<default>"'$AUDIO'"</default>
+							<action>if true enable: EQUALIZER</action>
+							<action>if true enable: VOL</action>
+							<action>if true enable: DOLBY</action>
+							<action>if false disable: EQUALIZER</action>
+							<action>if false disable: VOL</action>
+							<action>if false disable: DOLBY</action>
+						</checkbox>
+						<text width-request="10"><label>""</label></text>
+						<text><label>Volume level:</label></text>
+						<combobox tooltip-text="Volume level. Change during playback with ctrl+up and ctrl+down." width-request="100">'
+							# add disabled if needed
+							[ "$AUDIO" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+							# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<variable>VOL</variable>
+							'$VOL_ITEMS'
+						</combobox>
+					</hbox>
+					<hbox>
+						<text><label>Equalizer:</label></text>
+						<combobox width-request="100" tooltip-text="Set the equaliser to a preset filter" width-request="110">'
+							# add disabled if needed
+							[ "$AUDIO" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+							# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<variable>EQUALIZER</variable>
+							'$EQUALIZER_ITEMS'
+						</combobox>
+						<text width-request="10"><label>""</label></text>
+						<text><label>Dolby Surround:</label></text>
+						<combobox  width-request="100" tooltip-text="Enable Dolby Surround Sound to be enabled during playback" width-request="100">'
+							# add disabled if needed
+							[ "$AUDIO" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+							# continue GUI
+							VLCGTKGUI=${VLCGTKGUI}'<variable>DOLBY</variable>
+							'$DOLBY_ITEMS'
+						</combobox>
+					</hbox>
+				</vbox>
+			</frame>
+
+			<frame>
+				<hbox>
+					<checkbox tooltip-text="Enable fullscreen display for videos">
+						<label>Fullscreen</label>
+						<variable>FULL</variable>
+						<default>"'$FULL'"</default>
+					</checkbox>
+					<checkbox tooltip-text="Show the video window in top of all other applications">
+						<label>On top</label>
+						<variable>ON_TOP</variable>
+						<default>"'$ON_TOP'"</default>
+					</checkbox>
+					<checkbox tooltip-text="Enable overlay video output during playback">
+						<label>Overlay</label>
+						<variable>OVERLAY</variable>
+						<default>"'$OVERLAY'"</default>
+					</checkbox>
+					<text width-request="10"><label>""</label></text>
+					<text><label>Output:</label></text>
+					<combobox width-request="100" tooltip-text="Choose which module is used to display video">
+						<variable>VOUT</variable>'
+						#131012 replace xvideo with x11, if using vesa xorg module or Xvesa X server
+						[ "$VOUT" = "XVideo" -a "`readlink $(which X) 2>/dev/null`" = "Xvesa" ] && VOUT="X11" # 2.3.3
+						[ "$VOUT" = "XVideo" -a -f /etc/X11/xorg.conf ] && [ "`grep 'card0driver' /etc/X11/xorg.conf | grep '"vesa"'`" != "" ] && VOUT="X11"
+						VLCGTKGUI=${VLCGTKGUI}$VOUT_ITEMS
+						VLCGTKGUI=${VLCGTKGUI}'</combobox>
+				</hbox>
+				<hbox>
+					<text><label>Crop:</label></text>
+					<combobox width-request="100" tooltip-text="Choose how the video image is cropped.">
+						<variable>CROP</variable>
+						'$CROP_ITEMS'
+					</combobox>
+					<text width-request="10"><label>""</label></text>
+					<text><label>Aspect:</label></text>
+					<combobox width-request="100" tooltip-text="Choose how the video image is stretched.">
+						<variable>ASPECT</variable>
+						'$ASPECT_ITEMS'
+					</combobox>
+				</hbox>
+			</frame>
+
+			<frame>
+				<hbox>
+					<radiobutton tooltip-text="Tick this box to try to find any available subtitles automatically">
+						<label>Auto detect</label>
+						<variable>AUTO_SUBS</variable>
+						<default>"'$AUTO_SUBS'"</default>
+						<action>if true disable: SUBS</action>
+						<action>if false enable: SUBS</action>
+					</radiobutton>
+					<radiobutton tooltip-text="Tick this box to try to use a chosen subtitles file">
+						<label>Use file</label>
+						<variable>NO_AUTO_SUBS</variable>
+						<default>"'$NO_AUTO_SUBS'"</default>
+						<action>if true enable: SUBS</action>
+						<action>if false disable: SUBS</action>
+						<action>if true enable: SUBS_BTN</action>
+						<action>if false disable: SUBS_BTN</action>
+						</radiobutton>
+					<text width-request="120"><label>""</label></text>
+					<text><label>Delay (seconds)</label></text>
+					<entry width-request="80" tooltip-text="the number of seconds to delay the subtitles. Enter a negative number to make subtitles appear earlier.">
+					  <input>echo '$SUBS_DELAY'</input>
+					  <variable>SUBS_DELAY</variable>
+					  <visible>enabled</visible>
+					</entry>
+				</hbox>
+				<hbox>
+					<text><label>Subtitle file:</label></text>
+					<entry tooltip-text="Choose a subtitles file">'
+						# add disabled if needed
+						[ "$AUTO_SUBS" = true ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'<variable>SUBS</variable>
+						<input>echo "'$SUBS'"</input>
+					</entry>
+					<button relief="2" tooltip-text="Click here to choose a subtitle file">'
+						# add disabled if needed
+						[ "$AUTO_SUBS" = true ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'<input file stock="gtk-open"></input>
+						<action type="fileselect">SUBS</action>
+						<variable>SUBS_BTN</variable>
+					</button>
+				</hbox>
+			</frame>
+
+			<frame>
+				<hbox>
+					<checkbox tooltip-text="Enable the on-screen display during video playback">
+						<label>Enable</label>
+						<variable>OSD</variable>
+						<default>"'$OSD'"</default>
+						<action>if true enable: OSD_FONT</action>
+						<action>if true enable: OSD_FONT_BTN</action>
+						<action>if true enable: OSD_FONT_SIZE</action>
+						<action>if true enable: OSD_POS</action>
+						<action>if true enable: OSD_FX</action>
+						<action>if true enable: OSD_TIMEOUT</action>
+						<action>if false disable: OSD_FONT</action>
+						<action>if false disable: OSD_FONT_BTN</action>
+						<action>if false disable: OSD_FONT_SIZE</action>
+						<action>if false disable: OSD_POS</action>
+						<action>if false disable: OSD_FX</action>
+						<action>if false disable: OSD_TIMEOUT</action>
+					</checkbox>
+					<text><label>""</label></text>
+					<text><label>Font:</label></text>
+					<button relief="2" tooltip-text="Click here to choose a truetype font file for the OSD">
+						<variable>OSD_FONT_BTN</variable>
+						<input file stock="gtk-open"></input>
+						<action type="fileselect">OSD_FONT</action>'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'</button>
+					<entry tooltip-text="Choose a truetype font file (.ttf)" width-request="165">
+						<variable>OSD_FONT</variable>
+						<input>echo "'$OSD_FONT'"</input>'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'</entry>
+					<text><label>Timeout:</label></text>
+					<entry tooltip-text="The amount of time to show the OSD, in seconds" width-request="5">
+						<variable>OSD_TIMEOUT</variable>
+						<input>echo '$OSD_TIMEOUT'</input>'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'</entry>
+				</hbox>
+				<hbox>
+					<text><label>Size:</label></text>
+					<combobox tooltip-text="Choose the size of your OSD fonts" width-request="100">'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'<variable>OSD_FONT_SIZE</variable>
+						'$OSD_FONT_SIZE_ITEMS'
+					</combobox>
+					<text><label>Style:</label></text>
+					<combobox tooltip-text="Choose an effect for your OSD fonts" width-request="110">'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'<variable>OSD_FX</variable>
+						'$OSD_FX_ITEMS'
+					</combobox>
+					<text><label>Position:</label></text>
+					<combobox tooltip-text="Where you want the OSD to be displayed" width-request="120">'
+						# add disabled if needed
+						[ "$OSD" = false ] && VLCGTKGUI=${VLCGTKGUI}'<visible>disabled</visible>'
+						# continue GUI
+						VLCGTKGUI=${VLCGTKGUI}'<variable>OSD_POS</variable>
+						'$OSD_POS_ITEMS'
+					</combobox>
+				</hbox>
+			</frame>
+
+			<frame>
+				<hbox>
+					<text><label>HTTP Cache (ms):</label></text>
+					<entry tooltip-text="The amount of time to cache http streams, in milliseconds">
+						<variable>HTTP_CACHING</variable>
+						<input>echo '$HTTP_CACHING'</input>
+					</entry>
+					<text><label>MMS Cache (ms):</label></text>
+					<entry tooltip-text="The amount of time to cache mms:// streams, in milliseconds">
+						<variable>MMS_CACHING</variable>
+						<input>echo '$MMS_CACHING'</input>
+					</entry>
+					<text><label>Force IPv4/6:</label></text>
+					<combobox tooltip-text="Choose to force IPv4 or IPv6, or use the default." width-request="90">
+						<variable>IPV46</variable>
+						'$IPV46_ITEMS'
+					</combobox>
+				</hbox>
+				<hbox>
+					<text><label>SopCast Port:</label></text>
+					<combobox tooltip-text="The port '$APPNAME' will try to use for playing and recording SopCast URLs" width-request="90">
+						<variable>SOPCAST_PORT</variable>
+						'$SOPCAST_PORT_ITEMS'
+					</combobox>
+					<text><label>Youtube Quality:</label></text>
+					<combobox tooltip-text="The quality settings for youtube playback and download." width-request="90">
+						<variable>YOUTUBE</variable>
+						'$YOUTUBE_ITEMS'
+					</combobox>
+				</hbox>
+			</frame>
+
+			<frame>
+				<hbox>
+					<text><label>Log file:  </label></text>
+					<button tooltip-text="Open the log file in a text editor">
+						<input file stock="gtk-edit"></input>
+						<action>[ -f "'$LOGFILE'" ] && defaulttexteditor "'$LOGFILE'" || Xdialog --title "'$APPNAME' '$APPVER'" --msgbox "Not a file" 5 35 &</action>
+					</button>
+					<entry tooltip-text="This is the file where VLC will record all warning, error and output messages. Leave blank to disable the logfile.">
+						<variable>LOGFILE</variable>
+						<input>echo "'$LOGFILE'"</input>
+					</entry>
+					<text><label>""</label></text>
+					<checkbox tooltip-text="Enable direct rendering by ffpmeg, default is enabled.">
+						<label>FFmpeg DR </label>
+						<variable>FF_DR</variable>
+						<default>"'$FF_DR'"</default>
+					</checkbox>
+					<checkbox tooltip-text="Allow non specification-compliant speed up tricks. Faster playback, but more errors may happen.">
+						<label>FFmpeg fast</label>
+						<variable>FF_FAST</variable>
+						<default>"'$FF_FAST'"</default>
+					</checkbox>
+				</hbox>
+				<hbox>
+					<text><label>Cmd line:</label></text>
+					<button tooltip-text="See all VLC command line options in a text-editor">
+						<input file stock="gtk-help"></input>
+						<action>echo "$(vlc -H 2>&1)" > /tmp/vlc-gtk_vlchelp.txt</action>
+						<action>defaulttexteditor /tmp/vlc-gtk_vlchelp.txt &</action>
+					</button>
+					<entry tooltip-text="VLC will include any command line interface options you add here when executing playback. To see available options, click the Help button">
+						<variable>CLI_OPT</variable>
+						<input>echo "'$CLI_OPT'"</input>
+					</entry>
+					<checkbox tooltip-text="Tick to enable sub pictures, inc logos and watermarking features">
+						<label>Sub-pictures</label>
+						<variable>SUBPIC</variable>
+						<default>"'$SUBPIC'"</default>
+					</checkbox>
+					<checkbox tooltip-text="If enabled, VLC playback will be replaced by a popup dialog, showing the commands VLC would normally run to start playback.">
+						<label>Debugger    </label>
+						<variable>DEBUG</variable>
+						<default>"'$DEBUG'"</default>
+					</checkbox>
+				</hbox>
+			</frame>
+		</notebook>
+
+		<hbox>
+			<button relief="2" use-stock="true" label="gtk-edit" tooltip-text="Manually edit the config file, and favourite streams in a text editor">
+				##231212 added faves list
+				<action>defaulttexteditor '$FAVES' '$CONFIG'</action>
+			</button>
+			<button relief="2" use-stock="true" label="gtk-save" tooltip-text="Save '$APPNAME' settings">
+				<action>execute; Xdialog --title "'$APPNAME' '${APPVER}'" --center --msgbox "Settings saved" 5 30;</action>
+			</button>
+			<text width-request="100"><label>""</label></text>
+			<button relief="2" tooltip-text="Stop the most recent VLC playback process only. Click again to kill the one loaded before that, and so on. NOTE: This button will not kill any stream downloads, capture processes, etc - only video and audio playback.">
+				<input file stock="gtk-stop"></input>
+				<label>Stop Playback</label>
+				<action>kill_vlc</action>
+				##151012 kill last used OSC, try loading another if needed
+				<action>export OSCPID=`cat $OSCPIDFILE`; kill $OSCPID &>/dev/null</action>
+			</button>
+			<button relief="2" tooltip-text="Launch on screen controls (OSC) for video playback - only needed if video file already playing but not OSC is running!">
+				<input file stock="gtk-jump-to"></input>
+				<label>OSC</label>
+				<action>[ "`ps | grep -v grep | grep $(which vlc)`" != "" ] && launch_osc || Xdialog --title "'$APPNAME' '$APPVER'" --msgbox "VLC must be playing a video when you run these on screen controls (OSC)" 5 0 &</action>
+			</button>
+			<button relief="2" use-stock="true" label="gtk-quit"  tooltip-text="Exit this GUI frontend">
+				<action>[ -x /usr/bin/rejoystickcc ] && /usr/bin/rejoystickcc --load --profile None &</action>
+				<action type="exit">EXIT_NOW</action>
+			</button>
+		</hbox>
+	</vbox>
+</window>'
+}
+
+#151012 kill the old gui before loading this one
+GUIPID=`cat $GUIPIDFILE 2>/dev/null`; kill $GUIPID &>/dev/null
+VLCGTKGUI="`echo "$VLCGTKGUI" | sed -e 's/##.*//'`" #161012 allow comments in GUI xml code
+${GTKDIALOG} -c -s <<< "${VLCGTKGUI}" 1>/dev/null & #040812 only some stuf from sdout
+echo $! > $GUIPIDFILE #270712 store PID of GUI (for restarting GUI)
+exit 0
